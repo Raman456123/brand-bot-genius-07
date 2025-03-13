@@ -381,8 +381,9 @@ export class AIInfluencerBrain implements AIBrainInterface {
 
   /**
    * Select the next activity to run (fix for controller.ts error)
+   * Modified to return a Promise to match the interface
    */
-  public selectNextActivity(): Activity | null {
+  public async selectNextActivity(): Promise<Activity | null> {
     return this.selectActivity();
   }
 
