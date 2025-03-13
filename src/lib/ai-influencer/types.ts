@@ -1,4 +1,3 @@
-
 export interface ActivityResult {
   success: boolean;
   data: any | null;
@@ -105,4 +104,16 @@ export interface TwitterPostResult {
 
 export interface TwitterMediaUploadResult {
   mediaId: string;
+}
+
+export interface AnalyzeDailyOptions {
+  systemPrompt?: string;
+  maxTokens?: number;
+  activityLimit?: number;
+}
+
+export interface AnalyzeDailyResult {
+  reflection: string;
+  model: string;
+  finishReason: string;
 }

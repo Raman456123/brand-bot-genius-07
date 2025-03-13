@@ -3,6 +3,7 @@ import { ChatActivity } from "./activities/ChatActivity";
 import { ImageGenerationActivity } from "./activities/ImageGenerationActivity";
 import { WebScrapingActivity } from "./activities/WebScrapingActivity";
 import { XAPIActivity } from "./activities/XAPIActivity";
+import { AnalyzeDailyActivity } from "./activities/AnalyzeDailyActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -62,7 +63,7 @@ export class AIInfluencerBrain {
   private initializeActivities(): void {
     // Register the chat activity by default
     const chatActivity = new ChatActivity({
-      modelName: "gpt-4",
+      modelName: "gpt-4o-mini",
       systemPrompt: "You are a helpful AI assistant.",
       maxTokens: 150
     });
@@ -87,10 +88,18 @@ export class AIInfluencerBrain {
       twitterUsername: "AIInfluencer"
     });
     
+    // Register the daily analysis activity
+    const analyzeDailyActivity = new AnalyzeDailyActivity({
+      systemPrompt: "You are an AI that helps summarize the events and activities from recent memory. Keep the reflection concise and highlight any patterns or insights.",
+      maxTokens: 200,
+      activityLimit: 15
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
     this.activities.push(xApiActivity);
+    this.activities.push(analyzeDailyActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
