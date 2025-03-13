@@ -1,9 +1,11 @@
-
 export interface ActivityResult {
   success: boolean;
   data: any | null;
   error: string | null;
   metadata?: Record<string, any>;
+  timestamp?: string;
+  importance?: number;
+  activity_type?: string;
 }
 
 export interface Activity {
@@ -271,4 +273,27 @@ export interface SuggestNewActivitiesResult {
   suggestions: string;
   model?: string;
   finishReason?: string;
+}
+
+export interface MemoryStats {
+  shortTerm: number;
+  longTerm: number;
+  total: number;
+}
+
+export interface MemoryManager {
+  storeActivityResult: (activityResult: any) => void;
+  getRecentActivities: (limit?: number, offset?: number) => any[];
+  getImportantActivities: (limit?: number, offset?: number) => any[];
+  searchMemory: (query: string) => any[];
+  getActivitiesByType: (activityType: string) => any[];
+  getActivityCount: () => MemoryStats;
+  addToLongTermMemory: (memory: any) => void;
+  consolidateMemories: () => void;
+  clearActivities: () => void;
+  clearShortTermMemory: () => void;
+  saveApiKey: (activityName: string, keyName: string, keyValue: string) => void;
+  getApiKey: (activityName: string, keyName: string) => string | null;
+  getApiKeyStatuses: () => Record<string, Record<string, boolean>>;
+  getRecentActivitySummary: (limit?: number) => string;
 }

@@ -63,7 +63,9 @@ export class ChatActivity implements Activity {
         return {
           success: false,
           error: "No prompt provided for chat activity",
-          data: null
+          data: null,
+          activity_type: this.name,
+          timestamp: new Date().toISOString()
         };
       }
       
@@ -88,7 +90,9 @@ export class ChatActivity implements Activity {
         return {
           success: false,
           error: "No API key available for OpenAI",
-          data: null
+          data: null,
+          activity_type: this.name,
+          timestamp: new Date().toISOString()
         };
       }
       
@@ -111,7 +115,9 @@ export class ChatActivity implements Activity {
         return {
           success: false,
           error: response.error,
-          data: null
+          data: null,
+          activity_type: this.name,
+          timestamp: new Date().toISOString()
         };
       }
       
@@ -129,14 +135,18 @@ export class ChatActivity implements Activity {
           timestamp: new Date().toISOString(),
           model: response.data.model,
           promptLength: params.prompt.length
-        }
+        },
+        activity_type: this.name,
+        timestamp: new Date().toISOString()
       };
     } catch (error) {
       console.error("Error in chat activity:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
-        data: null
+        data: null,
+        activity_type: this.name,
+        timestamp: new Date().toISOString()
       };
     }
   }
