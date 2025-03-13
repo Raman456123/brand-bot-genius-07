@@ -1,4 +1,3 @@
-
 import { Activity, ActivityResult, ApiKeyManager, Integration } from "./types";
 
 /**
@@ -421,5 +420,12 @@ export class AIInfluencerBrain {
         timestamp: new Date().toISOString()
       };
     }
+  }
+
+  /**
+   * Get the current state of the AI Influencer
+   */
+  getState(): AIState {
+    return { ...this.state };
   }
 }

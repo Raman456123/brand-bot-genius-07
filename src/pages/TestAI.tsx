@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AIInfluencerBrain } from "@/lib/ai-influencer/brain";
-import { Activity, Integration } from "@/lib/ai-influencer/types";
+import { AIInfluencerController } from "@/lib/ai-influencer/controller";
+import { Activity, Integration, ActivityResult } from "@/lib/ai-influencer/types";
+import { Switch } from "@/components/ui/switch";
 
 const TestAI = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -24,35 +25,76 @@ const TestAI = () => {
   const [apiKeyName, setApiKeyName] = useState("");
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, Record<string, boolean>>>({});
-  const brainRef = useRef<AIInfluencerBrain | null>(null);
+  const [autoRun, setAutoRun] = useState(false);
+  const controllerRef = useRef<AIInfluencerController | null>(null);
 
   useEffect(() => {
-    // Initialize the brain on component mount
-    if (!brainRef.current) {
-      brainRef.current = new AIInfluencerBrain();
-      brainRef.current.loadActivities();
+    // Initialize the controller on component mount
+    if (!controllerRef.current) {
+      controllerRef.current = new AIInfluencerController();
+      
+      // Register event listeners
+      controllerRef.current.on('log', (message: string) => {
+        addLog(message);
+      });
+      
+      controllerRef.current.on('activityCompleted', (result: ActivityResult, activityName: string) => {
+        const newEnergy = controllerRef.current?.getBrain().getState().energy || 0;
+        
+        // Update activity status
+        setActivities(prev => prev.map(a => 
+          a.name === activityName 
+            ? { ...a, status: "completed (on cooldown)" } 
+            : a
+        ));
+        
+        // Update brain state display
+        setBrainState(prev => ({
+          ...prev,
+          energy: newEnergy,
+          lastActivity: activityName
+        }));
+      });
+      
+      controllerRef.current.on('stateChanged', (state) => {
+        setBrainState(prev => ({
+          ...prev,
+          energy: state.energy,
+          mood: state.mood
+        }));
+      });
       
       // Load available activities to display
-      if (brainRef.current) {
-        const availableActivities = brainRef.current.getAvailableActivities();
-        setActivities(availableActivities.map(a => ({ 
-          name: a.name, 
-          status: "available",
-          requiredApiKeys: a.requiredApiKeys 
-        })));
-        
-        // Load integrations
-        setIntegrations(brainRef.current.getAvailableIntegrations());
-        
-        // Load API key statuses
-        updateApiKeyStatuses();
-      }
+      const availableActivities = controllerRef.current.getBrain().getAvailableActivities();
+      setActivities(availableActivities.map(a => ({ 
+        name: a.name, 
+        status: "available",
+        requiredApiKeys: a.requiredApiKeys 
+      })));
+      
+      // Load integrations
+      setIntegrations(controllerRef.current.getBrain().getAvailableIntegrations());
+      
+      // Load API key statuses
+      updateApiKeyStatuses();
     }
   }, []);
 
+  useEffect(() => {
+    // Start or stop auto-running based on autoRun state
+    if (autoRun && !isRunning && controllerRef.current) {
+      controllerRef.current.start(10000); // Run every 10 seconds
+      setIsRunning(true);
+    } else if (!autoRun && isRunning && controllerRef.current) {
+      controllerRef.current.stop();
+      setIsRunning(false);
+    }
+  }, [autoRun, isRunning]);
+
   const updateApiKeyStatuses = async () => {
-    if (brainRef.current) {
-      const statuses = await brainRef.current.getApiKeyStatuses();
+    if (controllerRef.current) {
+      const brain = controllerRef.current.getBrain();
+      const statuses = await brain.getApiKeyStatuses();
       setApiKeyStatuses(statuses);
     }
   };
@@ -62,66 +104,23 @@ const TestAI = () => {
   };
 
   const handleTest = async () => {
-    if (!brainRef.current) return;
+    if (!controllerRef.current) return;
     
     setIsRunning(true);
     addLog("Starting AI influencer test...");
     
     try {
       // Get available activities
-      const availableActivities = brainRef.current.getAvailableActivities();
+      const brain = controllerRef.current.getBrain();
+      const availableActivities = brain.getAvailableActivities();
       setActivities(availableActivities.map(a => ({ 
         name: a.name, 
         status: "available",
         requiredApiKeys: a.requiredApiKeys 
       })));
-      addLog(`Loaded ${availableActivities.length} activities`);
       
-      // Select and run an activity
-      addLog("Selecting next activity based on current state...");
-      const nextActivity = await brainRef.current.selectNextActivity();
-      
-      if (nextActivity) {
-        addLog(`Selected activity: ${nextActivity.name}`);
-        addLog(`Energy cost: ${nextActivity.energyCost}`);
-        
-        // Check for required API keys
-        if (nextActivity.requiredApiKeys && nextActivity.requiredApiKeys.length > 0) {
-          addLog(`Required API keys: ${nextActivity.requiredApiKeys.join(", ")}`);
-        }
-        
-        addLog(`Running ${nextActivity.name}...`);
-        
-        // Execute the activity
-        const result = await brainRef.current.executeActivity(nextActivity);
-        
-        if (result.success) {
-          addLog(`Activity completed successfully: ${result.data}`);
-        } else {
-          addLog(`Activity failed: ${result.error}`);
-        }
-        
-        // Update state after activity
-        const newEnergy = Math.max(0, brainState.energy - nextActivity.energyCost);
-        addLog(`Energy reduced from ${brainState.energy.toFixed(1)} to ${newEnergy.toFixed(1)}`);
-        
-        // Update UI
-        setBrainState(prev => ({
-          ...prev,
-          energy: newEnergy,
-          lastActivity: nextActivity.name
-        }));
-        
-        // Update activity status
-        setActivities(prev => prev.map(a => 
-          a.name === nextActivity.name 
-            ? { ...a, status: "completed (on cooldown)" } 
-            : a
-        ));
-      } else {
-        addLog("No suitable activity found. The AI needs to rest or recover energy.");
-      }
-      
+      // Run a single activity cycle
+      await controllerRef.current.runActivityCycle();
     } catch (error) {
       addLog(`Error: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -130,12 +129,13 @@ const TestAI = () => {
   };
 
   const handleSetApiKey = async () => {
-    if (!brainRef.current || !selectedActivity || !apiKeyName || !apiKeyValue) {
+    if (!controllerRef.current || !selectedActivity || !apiKeyName || !apiKeyValue) {
       addLog("Cannot set API key: missing required information");
       return;
     }
     
-    const success = await brainRef.current.setApiKey(selectedActivity, apiKeyName, apiKeyValue);
+    const brain = controllerRef.current.getBrain();
+    const success = await brain.setApiKey(selectedActivity, apiKeyName, apiKeyValue);
     
     if (success) {
       addLog(`Successfully set API key "${apiKeyName}" for ${selectedActivity}`);
@@ -147,6 +147,13 @@ const TestAI = () => {
     } else {
       addLog(`Failed to set API key "${apiKeyName}" for ${selectedActivity}`);
     }
+  };
+
+  const handleExecuteSpecificActivity = async (activityName: string) => {
+    if (!controllerRef.current) return;
+    
+    addLog(`Manually executing ${activityName}...`);
+    await controllerRef.current.executeActivity(activityName);
   };
 
   return (
@@ -161,13 +168,23 @@ const TestAI = () => {
               This interface demonstrates a simplified version of the AI influencer brain
               that selects activities based on state and constraints.
             </p>
+            
+            <div className="flex items-center space-x-2 mb-4">
+              <Switch 
+                id="auto-run" 
+                checked={autoRun} 
+                onCheckedChange={setAutoRun}
+              />
+              <Label htmlFor="auto-run">Auto-run activities</Label>
+            </div>
+            
             <div className="flex flex-col sm:flex-row gap-4">
               <Button 
                 onClick={handleTest}
                 disabled={isRunning}
                 className="w-full sm:w-auto"
               >
-                {isRunning ? "Running Test..." : "Test Influencer Brain"}
+                {isRunning ? "Running Test..." : "Test Single Activity"}
               </Button>
               
               <Dialog>
@@ -369,6 +386,14 @@ const TestAI = () => {
                           Required API keys: {activity.requiredApiKeys.join(", ")}
                         </div>
                       )}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-2 w-full"
+                        onClick={() => handleExecuteSpecificActivity(activity.name)}
+                      >
+                        Execute Now
+                      </Button>
                     </li>
                   ))}
                 </ul>
