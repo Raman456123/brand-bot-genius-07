@@ -1,3 +1,4 @@
+
 export interface ActivityResult {
   success: boolean;
   data: any | null;
@@ -87,4 +88,21 @@ export interface WebScrapingResult {
     bodyText?: string;
   };
   url: string;
+}
+
+export interface TwitterPostOptions {
+  rateLimit?: number;
+  cooldownPeriod?: number;
+  twitterUsername?: string;
+}
+
+export interface TwitterPostResult {
+  tweetId: string;
+  content: string;
+  tweetLink: string;
+  mediaCount: number;
+}
+
+export interface TwitterMediaUploadResult {
+  mediaId: string;
 }

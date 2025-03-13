@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AIInfluencerController } from "@/lib/ai-influencer/controller";
-import { Activity, Integration, ActivityResult, WebScrapingResult } from "@/lib/ai-influencer/types";
+import { Activity, Integration, ActivityResult, WebScrapingResult, TwitterPostResult } from "@/lib/ai-influencer/types";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +38,11 @@ const TestAI = () => {
   const [scrapingUrl, setScrapingUrl] = useState("");
   const [scrapeResults, setScrapeResults] = useState<WebScrapingResult | null>(null);
   const [isScrapingLoading, setIsScrapingLoading] = useState(false);
+  
+  const [tweetText, setTweetText] = useState("");
+  const [tweetMediaUrls, setTweetMediaUrls] = useState("");
+  const [tweetResult, setTweetResult] = useState<TwitterPostResult | null>(null);
+  const [isPostingTweet, setIsPostingTweet] = useState(false);
   
   const controllerRef = useRef<AIInfluencerController | null>(null);
 
@@ -246,6 +251,38 @@ const TestAI = () => {
     }
   };
 
+  const handleTweetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tweetText.trim() || !controllerRef.current) return;
+    
+    setIsPostingTweet(true);
+    setTweetResult(null);
+    addLog(`Posting tweet: "${tweetText}"`);
+    
+    const mediaUrls = tweetMediaUrls.trim() 
+      ? tweetMediaUrls.split("\n").filter(url => url.trim().length > 0)
+      : [];
+    
+    try {
+      const result = await controllerRef.current.executeActivity("post_tweet", {
+        text: tweetText,
+        mediaUrls: mediaUrls
+      });
+      
+      if (result.success && result.data) {
+        setTweetResult(result.data as TwitterPostResult);
+        addLog(`Tweet posted successfully! Tweet ID: ${result.data.tweetId}`);
+      } else {
+        addLog(`Tweet posting error: ${result.error}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`Tweet posting exception: ${errorMessage}`);
+    } finally {
+      setIsPostingTweet(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-6">
       <div className="max-w-5xl mx-auto">
@@ -444,6 +481,7 @@ const TestAI = () => {
                 <TabsTrigger value="chat">Chat</TabsTrigger>
                 <TabsTrigger value="image">Image Generation</TabsTrigger>
                 <TabsTrigger value="scraping">Web Scraping</TabsTrigger>
+                <TabsTrigger value="twitter">Twitter</TabsTrigger>
               </TabsList>
               
               <TabsContent value="chat">
@@ -577,6 +615,74 @@ const TestAI = () => {
                       </div>
                     </div>
                   </div>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="twitter">
+                <h2 className="text-xl font-semibold mb-4">Test Twitter API</h2>
+                <form onSubmit={handleTweetSubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="tweet-text">Tweet Content</Label>
+                    <Textarea
+                      id="tweet-text"
+                      placeholder="What's happening?"
+                      value={tweetText}
+                      onChange={(e) => setTweetText(e.target.value)}
+                      className="min-h-[100px]"
+                      maxLength={280}
+                    />
+                    <div className="text-xs text-right mt-1 text-gray-500">
+                      {tweetText.length}/280
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="tweet-media">Media URLs (one per line, optional)</Label>
+                    <Textarea
+                      id="tweet-media"
+                      placeholder="https://example.com/image1.jpg"
+                      value={tweetMediaUrls}
+                      onChange={(e) => setTweetMediaUrls(e.target.value)}
+                      className="min-h-[80px]"
+                    />
+                  </div>
+                  <Button type="submit" disabled={isPostingTweet || !tweetText.trim()}>
+                    {isPostingTweet ? "Posting..." : "Post Tweet"}
+                  </Button>
+                </form>
+                
+                {tweetResult && (
+                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+                    <h3 className="font-medium mb-2">Tweet Posted:</h3>
+                    <div className="space-y-2">
+                      <p className="whitespace-pre-wrap">{tweetResult.content}</p>
+                      <div>
+                        <span className="font-semibold">Tweet ID:</span> {tweetResult.tweetId}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Media count:</span> {tweetResult.mediaCount}
+                      </div>
+                      <div>
+                        <a 
+                          href={tweetResult.tweetLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:text-blue-700 underline"
+                        >
+                          View Tweet
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {!apiKeyStatuses["post_tweet"]?.["TWITTER_API_KEY"] && (
+                  <Alert className="mt-4">
+                    <AlertTitle>API Key Required</AlertTitle>
+                    <AlertDescription>
+                      You need to set a Twitter API key to use the Twitter activity. Click "Configure API Keys" 
+                      to add your key.
+                    </AlertDescription>
+                  </Alert>
                 )}
               </TabsContent>
             </Tabs>

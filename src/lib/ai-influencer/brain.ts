@@ -2,6 +2,7 @@ import { Activity, ActivityResult, ApiKeyManager, Integration, AIState } from ".
 import { ChatActivity } from "./activities/ChatActivity";
 import { ImageGenerationActivity } from "./activities/ImageGenerationActivity";
 import { WebScrapingActivity } from "./activities/WebScrapingActivity";
+import { XAPIActivity } from "./activities/XAPIActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -79,9 +80,17 @@ export class AIInfluencerBrain {
       timeout: 10000
     });
     
+    // Register the Twitter API activity
+    const xApiActivity = new XAPIActivity({
+      rateLimit: 10, // Lower for testing
+      cooldownPeriod: 300,
+      twitterUsername: "AIInfluencer"
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
+    this.activities.push(xApiActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
