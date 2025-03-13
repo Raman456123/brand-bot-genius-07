@@ -1,3 +1,4 @@
+
 export interface ActivityResult {
   success: boolean;
   data: any | null;
@@ -180,4 +181,15 @@ export interface DrawActivityResult {
   imageUrl: string;
   width: number;
   height: number;
+}
+
+export interface EvaluateActivityOptions {
+  systemPrompt?: string;
+  maxTokens?: number;
+}
+
+export interface EvaluateActivityResult {
+  evaluation: string;
+  model?: string;
+  finishReason?: string;
 }

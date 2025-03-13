@@ -8,6 +8,7 @@ import { AnalyzeGitHubCommitsActivity } from "./activities/AnalyzeGitHubCommitsA
 import { BuildOrUpdateActivity } from "./activities/BuildOrUpdateActivity";
 import { DailyThoughtActivity } from "./activities/DailyThoughtActivity";
 import { DrawActivity } from "./activities/DrawActivity";
+import { EvaluateActivity } from "./activities/EvaluateActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -129,6 +130,12 @@ export class AIInfluencerBrain {
       maxGenerationsPerDay: 5
     });
     
+    // Register the evaluate activity
+    const evaluateActivity = new EvaluateActivity({
+      systemPrompt: "You are an AI that evaluates the potential effectiveness of newly generated Activities. You consider whether the code is likely to run, fits the being's objectives, and avoids major pitfalls. Provide a short bullet-point analysis.",
+      maxTokens: 250
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -138,6 +145,7 @@ export class AIInfluencerBrain {
     this.activities.push(buildOrUpdateActivity);
     this.activities.push(dailyThoughtActivity);
     this.activities.push(drawActivity);
+    this.activities.push(evaluateActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
@@ -355,5 +363,21 @@ export class AIInfluencerBrain {
     if (!canRun) {
       return {
         success: false,
-        error: `Activity ${activityName} cannot
-
+        error: `Activity ${activityName} cannot run with current state and API keys`,
+        data: null
+      };
+    }
+    
+    // Execute the activity
+    console.log(`Executing activity: ${activityName}`);
+    this.activityCooldowns.set(activity.name, Date.now());
+    this.state.lastActivity = activity.name;
+    this.state.lastActivityTimestamp = new Date().toISOString();
+    this.state.energy -= activity.energyCost;
+    this.saveState();
+    
+    const result = await activity.execute(apiKeys, this.state, params);
+    
+    return result;
+  }
+}
