@@ -1,431 +1,301 @@
 import { Activity, ActivityResult, ApiKeyManager, Integration, AIState } from "./types";
+import { ChatActivity } from "./activities/ChatActivity";
 
 /**
- * Enhanced API key manager that uses localStorage with persistence
+ * In-memory API key manager for the AI influencer
  */
-class LocalStorageApiKeyManager implements ApiKeyManager {
-  private requiredKeys: Record<string, string[]> = {};
-  
-  private getKeyId(activityName: string, keyName: string): string {
-    return `ai_influencer_${activityName.toLowerCase()}_${keyName.toLowerCase()}`;
-  }
-
-  async checkApiKeyExists(activityName: string, keyName: string): Promise<boolean> {
-    const keyId = this.getKeyId(activityName, keyName);
-    return localStorage.getItem(keyId) !== null;
-  }
+class EnhancedApiKeyManager implements ApiKeyManager {
+  private apiKeys: Record<string, Record<string, string>> = {};
 
   async getApiKey(activityName: string, keyName: string): Promise<string | null> {
-    const keyId = this.getKeyId(activityName, keyName);
-    return localStorage.getItem(keyId);
+    return this.apiKeys[activityName]?.[keyName] || null;
   }
 
-  async setApiKey(activityName: string, keyName: string, value: string): Promise<boolean> {
-    try {
-      const keyId = this.getKeyId(activityName, keyName);
-      localStorage.setItem(keyId, value);
-      
-      // Register this key as required for the activity if not already registered
-      if (!this.requiredKeys[activityName]) {
-        this.requiredKeys[activityName] = [];
-      }
-      
-      if (!this.requiredKeys[activityName].includes(keyName)) {
-        this.requiredKeys[activityName].push(keyName);
-      }
-      
-      return true;
-    } catch (error) {
-      console.error("Error storing API key:", error);
-      return false;
+  async setApiKey(activityName: string, keyName: string, keyValue: string): Promise<boolean> {
+    if (!this.apiKeys[activityName]) {
+      this.apiKeys[activityName] = {};
     }
+    this.apiKeys[activityName][keyName] = keyValue;
+    return true;
   }
-  
-  /**
-   * Register required keys for an activity
-   */
-  registerRequiredKeys(activityName: string, keys: string[]): void {
-    this.requiredKeys[activityName] = [...keys];
-  }
-  
-  /**
-   * Get all registered required API keys
-   */
-  listRequiredApiKeys(): Record<string, string[]> {
-    return { ...this.requiredKeys };
-  }
-  
-  /**
-   * Get the status (exists/doesn't exist) for all registered API keys
-   */
-  async getAllApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>> {
+
+  async getApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>> {
     const statuses: Record<string, Record<string, boolean>> = {};
-    
-    for (const [activity, keys] of Object.entries(this.requiredKeys)) {
-      statuses[activity] = {};
-      
-      for (const key of keys) {
-        statuses[activity][key] = await this.checkApiKeyExists(activity, key);
+    for (const activityName in this.apiKeys) {
+      statuses[activityName] = {};
+      for (const keyName in this.apiKeys[activityName]) {
+        statuses[activityName][keyName] = !!this.apiKeys[activityName][keyName];
       }
     }
-    
     return statuses;
   }
 }
 
 /**
- * AIInfluencerBrain - A TypeScript adaptation of Pippin's Python framework
- * This is a simplified version that demonstrates the core concepts
+ * Brain for the AI influencer that manages state, activities, and decision making
  */
 export class AIInfluencerBrain {
   private activities: Activity[] = [];
-  private lastActivityTimes: Record<string, Date> = {};
-  private state = {
-    energy: 1.0,
-    mood: "neutral",
-    personality: {
-      creativity: 0.7,
-      friendliness: 0.6,
-      curiosity: 0.8
-    }
-  };
+  private availableActivities: Activity[] = [];
   private apiKeyManager: ApiKeyManager;
+  private state: AIState = {
+    mood: "neutral",
+    energy: 1.0,
+    lastActivity: "none"
+  };
+  private storageKey = "ai_influencer_state";
+  private activityCooldowns: Map<string, number> = new Map();
   private integrations: Integration[] = [];
 
-  constructor(customApiKeyManager?: ApiKeyManager) {
-    // Initialize the brain
-    this.apiKeyManager = customApiKeyManager || new LocalStorageApiKeyManager();
-    this.initializeIntegrations();
+  constructor() {
+    this.apiKeyManager = new EnhancedApiKeyManager();
+    this.initializeActivities();
+    this.loadState();
   }
 
   /**
-   * Initialize available integrations (mock implementation)
+   * Initialize activities that the AI influencer can perform
    */
-  private initializeIntegrations(): void {
-    // In a real implementation, this would load integrations from an API
-    // For now, we'll add a few mock integrations
-    this.integrations = [
-      {
-        name: "TWITTER",
-        displayName: "Twitter",
-        connected: false,
-        authModes: ["OAUTH2"],
+  private initializeActivities(): void {
+    // Register the chat activity by default
+    const chatActivity = new ChatActivity({
+      modelName: "gpt-4",
+      systemPrompt: "You are a helpful AI assistant.",
+      maxTokens: 150
+    });
+    
+    this.activities.push(chatActivity);
+    
+    // Example activities (replace with your actual activities)
+    this.activities.push({
+      name: "get_trending_topics",
+      description: "Fetches trending topics from social media",
+      energyCost: 0.3,
+      cooldown: 300000, // 5 minutes
+      requiredApiKeys: ["TRENDSAPI"],
+      canRun: async (apiKeys: Record<string, string>, state: any) => {
+        // Check if energy is sufficient and API key is available
+        return state.energy > 0.3 && !!apiKeys["TRENDSAPI"];
       },
-      {
-        name: "TRENDSAPI",
-        displayName: "Trends API",
-        connected: false,
-        authModes: ["API_KEY"],
-        apiKeyDetails: {
-          fields: [
-            {
-              name: "api_key",
-              displayName: "API Key",
-              description: "Your Trends API key",
-              required: true
-            }
-          ]
-        }
+      execute: async (apiKeys: Record<string, string>, state: any) => {
+        // Placeholder for fetching trending topics
+        console.log("Fetching trending topics with API key:", apiKeys["TRENDSAPI"]);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+        return {
+          success: true,
+          data: { topics: ["Topic 1", "Topic 2", "Topic 3"] },
+          error: null
+        };
       }
-    ];
+    });
+
+    this.activities.push({
+      name: "write_tweet",
+      description: "Writes a tweet about a given topic",
+      energyCost: 0.2,
+      cooldown: 180000, // 3 minutes
+      requiredApiKeys: ["TWITTERAPI"],
+      canRun: async (apiKeys: Record<string, string>, state: any) => {
+        // Check if energy is sufficient and API key is available
+        return state.energy > 0.2 && !!apiKeys["TWITTERAPI"];
+      },
+      execute: async (apiKeys: Record<string, string>, state: any, params: any) => {
+        // Placeholder for writing a tweet
+        if (!params?.topic) {
+          return {
+            success: false,
+            error: "No topic provided for tweet",
+            data: null
+          };
+        }
+        console.log("Writing tweet about", params.topic, "with API key:", apiKeys["TWITTERAPI"]);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+        return {
+          success: true,
+          data: { tweetId: "1234567890" },
+          error: null
+        };
+      }
+    });
+
+    this.availableActivities = [...this.activities];
+  }
+
+  /**
+   * Load state from local storage
+   */
+  private loadState(): void {
+    try {
+      const storedState = localStorage.getItem(this.storageKey);
+      if (storedState) {
+        this.state = JSON.parse(storedState);
+      }
+    } catch (error) {
+      console.error("Error loading state from local storage:", error);
+    }
+  }
+
+  /**
+   * Save state to local storage
+   */
+  private saveState(): void {
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(this.state));
+    } catch (error) {
+      console.error("Error saving state to local storage:", error);
+    }
+  }
+
+  /**
+   * Get the current state of the AI influencer
+   */
+  public getState(): AIState {
+    return this.state;
+  }
+
+  /**
+   * Get available activities
+   */
+  public getAvailableActivities(): Activity[] {
+    return this.availableActivities;
   }
 
   /**
    * Get available integrations
    */
-  getAvailableIntegrations(): Integration[] {
+  public getAvailableIntegrations(): Integration[] {
     return this.integrations;
   }
 
   /**
-   * Load available activities
+   * Add an integration
    */
-  loadActivities(): void {
-    // In the original Python code, this would dynamically load activities
-    // from Python files. Here, we'll hard-code some sample activities.
-    this.activities = [
-      {
-        name: "CreateContent",
-        energyCost: 0.3,
-        cooldown: 3600, // 1 hour in seconds
-        requiredSkills: ["creativity", "writing"],
-        execute: async (): Promise<ActivityResult> => {
-          return {
-            success: true,
-            data: "Created a new piece of content",
-            error: null,
-            metadata: {},
-            timestamp: new Date().toISOString()
-          };
-        }
-      },
-      {
-        name: "EngageWithFollowers",
-        energyCost: 0.2,
-        cooldown: 1800, // 30 minutes in seconds
-        requiredSkills: ["communication"],
-        execute: async (): Promise<ActivityResult> => {
-          return {
-            success: true,
-            data: "Responded to 5 comments from followers",
-            error: null,
-            metadata: {},
-            timestamp: new Date().toISOString()
-          };
-        }
-      },
-      {
-        name: "AnalyzeTrends",
-        energyCost: 0.4,
-        cooldown: 7200, // 2 hours in seconds
-        requiredSkills: ["analysis"],
-        requiredApiKeys: ["trendsapi"],
-        execute: async (): Promise<ActivityResult> => {
-          // Check if we have the required API key
-          const hasApiKey = await this.apiKeyManager.checkApiKeyExists("AnalyzeTrends", "trendsapi");
-          if (!hasApiKey) {
-            return {
-              success: false,
-              data: null,
-              error: "Missing required API key: trendsapi",
-              metadata: {},
-              timestamp: new Date().toISOString()
-            };
-          }
-          
-          return {
-            success: true,
-            data: "Analyzed current trends and identified 3 potential content topics",
-            error: null,
-            metadata: {},
-            timestamp: new Date().toISOString()
-          };
-        }
-      },
-      {
-        name: "PlanSchedule",
-        energyCost: 0.2,
-        cooldown: 21600, // 6 hours in seconds
-        requiredSkills: ["planning"],
-        execute: async (): Promise<ActivityResult> => {
-          return {
-            success: true,
-            data: "Planned content schedule for the next week",
-            error: null,
-            metadata: {},
-            timestamp: new Date().toISOString()
-          };
-        }
-      },
-      {
-        name: "SocialMediaPost",
-        energyCost: 0.3,
-        cooldown: 7200, // 2 hours in seconds
-        requiredSkills: ["communication", "creativity"],
-        requiredApiKeys: ["twitter"],
-        execute: async (): Promise<ActivityResult> => {
-          // Check if we have the required API key
-          const hasApiKey = await this.apiKeyManager.checkApiKeyExists("SocialMediaPost", "twitter");
-          if (!hasApiKey) {
-            return {
-              success: false,
-              data: null,
-              error: "Missing required API key: twitter",
-              metadata: {},
-              timestamp: new Date().toISOString()
-            };
-          }
-          
-          return {
-            success: true,
-            data: "Posted a new update to Twitter",
-            error: null,
-            metadata: {},
-            timestamp: new Date().toISOString()
-          };
-        }
-      }
-    ];
-    
-    // Register all required API keys with the manager
-    if (this.apiKeyManager instanceof LocalStorageApiKeyManager) {
-      for (const activity of this.activities) {
-        if (activity.requiredApiKeys && activity.requiredApiKeys.length > 0) {
-          (this.apiKeyManager as LocalStorageApiKeyManager).registerRequiredKeys(
-            activity.name, 
-            activity.requiredApiKeys
-          );
-        }
-      }
-    }
+  public addIntegration(integration: Integration): void {
+    this.integrations.push(integration);
   }
 
   /**
-   * Get all available activities
+   * Set API key for a specific activity
    */
-  getAvailableActivities(): Activity[] {
-    const now = new Date();
-    
-    return this.activities.filter(activity => {
-      const lastExecutionTime = this.lastActivityTimes[activity.name];
-      
-      // If this activity was never executed, it's available
-      if (!lastExecutionTime) {
-        return true;
-      }
-      
-      // Check if the cooldown period has passed
-      const timeSinceLastExecution = (now.getTime() - lastExecutionTime.getTime()) / 1000;
-      return timeSinceLastExecution >= activity.cooldown;
-    });
-  }
-
-  /**
-   * Check if an activity has all required API keys
-   */
-  async checkActivityApiKeys(activity: Activity): Promise<{hasAllKeys: boolean, missingKeys: string[]}> {
-    const missingKeys: string[] = [];
-    
-    if (!activity.requiredApiKeys || activity.requiredApiKeys.length === 0) {
-      return { hasAllKeys: true, missingKeys: [] };
-    }
-    
-    for (const key of activity.requiredApiKeys) {
-      const exists = await this.apiKeyManager.checkApiKeyExists(activity.name, key);
-      if (!exists) {
-        missingKeys.push(key);
-      }
-    }
-    
-    return {
-      hasAllKeys: missingKeys.length === 0,
-      missingKeys
-    };
+  public async setApiKey(activityName: string, keyName: string, keyValue: string): Promise<boolean> {
+    return this.apiKeyManager.setApiKey(activityName, keyName, keyValue);
   }
 
   /**
    * Get API key statuses for all activities
    */
-  async getApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>> {
-    return await this.apiKeyManager.getAllApiKeyStatuses();
+  public async getApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>> {
+    return this.apiKeyManager.getApiKeyStatuses();
   }
 
   /**
-   * Select the next activity based on current state and constraints
+   * Run a single activity cycle
    */
-  async selectNextActivity(): Promise<Activity | null> {
-    const availableActivities = this.getAvailableActivities();
-    
-    // Filter activities based on energy requirements
-    const suitableActivities = availableActivities.filter(activity => 
-      this.state.energy >= activity.energyCost
-    );
-    
-    if (suitableActivities.length === 0) {
+  public async runActivityCycle(): Promise<ActivityResult> {
+    // Select an activity based on the current state
+    const activity = this.selectActivity();
+
+    if (!activity) {
+      return {
+        success: false,
+        error: "No suitable activity found",
+        data: null
+      };
+    }
+
+    // Execute the selected activity
+    return this.executeActivity(activity.name);
+  }
+
+  /**
+   * Select an activity based on the current state
+   */
+  private selectActivity(): Activity | null {
+    // Filter activities that can run and are not on cooldown
+    const availableActivities = this.availableActivities.filter(activity => {
+      const lastRun = this.activityCooldowns.get(activity.name);
+      const isOnCooldown = lastRun && Date.now() - lastRun < activity.cooldown;
+      return !isOnCooldown;
+    });
+
+    if (availableActivities.length === 0) {
       return null;
     }
-    
-    // Filter activities based on API key requirements
-    const activitiesWithApiKeys: Activity[] = [];
-    for (const activity of suitableActivities) {
-      const { hasAllKeys } = await this.checkActivityApiKeys(activity);
-      if (hasAllKeys) {
-        activitiesWithApiKeys.push(activity);
-      }
-    }
-    
-    if (activitiesWithApiKeys.length === 0) {
-      console.log("No activities have all required API keys");
-      return suitableActivities[0]; // Fallback to first activity even without API keys
-    }
-    
-    // Weighted random selection based on personality
-    const weights = activitiesWithApiKeys.map(activity => {
-      let weight = 1.0;
-      
-      // Different activities might align better with different personality traits
-      if (activity.name === "CreateContent") {
-        weight *= (1 + this.state.personality.creativity * 0.5);
-      } else if (activity.name === "EngageWithFollowers" || activity.name === "SocialMediaPost") {
-        weight *= (1 + this.state.personality.friendliness * 0.5);
-      } else if (activity.name === "AnalyzeTrends") {
-        weight *= (1 + this.state.personality.curiosity * 0.5);
-      }
-      
-      return weight;
-    });
-    
-    // Select an activity using weighted random selection
-    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-    let randomValue = Math.random() * totalWeight;
-    
-    for (let i = 0; i < activitiesWithApiKeys.length; i++) {
-      randomValue -= weights[i];
-      if (randomValue <= 0) {
-        // Record the time we selected this activity
-        this.lastActivityTimes[activitiesWithApiKeys[i].name] = new Date();
-        return activitiesWithApiKeys[i];
-      }
-    }
-    
-    // Fallback to the first activity if something went wrong with the weighted selection
-    this.lastActivityTimes[activitiesWithApiKeys[0].name] = new Date();
-    return activitiesWithApiKeys[0];
+
+    // Simple random selection for now
+    const randomIndex = Math.floor(Math.random() * availableActivities.length);
+    return availableActivities[randomIndex];
   }
 
   /**
-   * Set an API key for an activity
+   * Execute a specific activity by name with optional parameters
    */
-  async setApiKey(activityName: string, keyName: string, value: string): Promise<boolean> {
-    return this.apiKeyManager.setApiKey(activityName, keyName, value);
-  }
-
-  /**
-   * Execute the given activity
-   */
-  async executeActivity(activity: Activity): Promise<ActivityResult> {
+  public async executeActivity(activityName: string, params?: any): Promise<ActivityResult> {
+    const activity = this.activities.find(a => a.name === activityName);
+    
+    if (!activity) {
+      return {
+        success: false,
+        error: `Activity ${activityName} not found`,
+        data: null
+      };
+    }
+    
+    // Check if activity is on cooldown
+    const lastRun = this.activityCooldowns.get(activity.name);
+    if (lastRun && Date.now() - lastRun < activity.cooldown) {
+      return {
+        success: false,
+        error: `Activity ${activityName} is on cooldown`,
+        data: null
+      };
+    }
+    
+    // Get API keys for the activity
+    const apiKeys: Record<string, string> = {};
+    for (const keyName of activity.requiredApiKeys || []) {
+      const key = await this.apiKeyManager.getApiKey(activity.name, keyName);
+      if (key) {
+        apiKeys[keyName] = key;
+      }
+    }
+    
+    // Check if activity can run
+    const canRun = await activity.canRun(apiKeys, this.state);
+    if (!canRun) {
+      return {
+        success: false,
+        error: `Activity ${activity.name} cannot run in current state`,
+        data: null
+      };
+    }
+    
+    // Execute activity
     try {
-      // Check API key requirements
-      const { hasAllKeys, missingKeys } = await this.checkActivityApiKeys(activity);
-      if (!hasAllKeys) {
-        return {
-          success: false,
-          data: null,
-          error: `Missing required API keys: ${missingKeys.join(", ")}`,
-          metadata: {},
-          timestamp: new Date().toISOString()
-        };
-      }
-      
-      // Log the start of the activity
-      console.log(`Starting activity: ${activity.name}`);
-      
-      // Execute the activity
-      const result = await activity.execute();
-      
-      // Update the energy after execution
+      // Consume energy
       this.state.energy = Math.max(0, this.state.energy - activity.energyCost);
       
-      // Log the completion of the activity
-      console.log(`Completed activity: ${activity.name}`);
+      // Execute activity
+      const result = await activity.execute(apiKeys, this.state, params);
+      
+      // Set cooldown
+      this.activityCooldowns.set(activity.name, Date.now());
+      
+      // Update state
+      if (result.success) {
+        this.state.lastActivity = activity.name;
+        this.state.lastActivityTimestamp = new Date().toISOString();
+        this.saveState();
+      }
       
       return result;
     } catch (error) {
-      console.error(`Error in activity ${activity.name}:`, error);
+      console.error(`Error executing activity ${activity.name}:`, error);
       return {
         success: false,
-        data: null,
         error: error instanceof Error ? error.message : String(error),
-        metadata: {},
-        timestamp: new Date().toISOString()
+        data: null
       };
     }
-  }
-
-  /**
-   * Get the current state of the AI Influencer
-   */
-  getState(): AIState {
-    return { ...this.state };
   }
 }

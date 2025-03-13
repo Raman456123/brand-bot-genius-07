@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AIInfluencerController } from "@/lib/ai-influencer/controller";
 import { Activity, Integration, ActivityResult } from "@/lib/ai-influencer/types";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
 
 const TestAI = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -26,14 +27,15 @@ const TestAI = () => {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, Record<string, boolean>>>({});
   const [autoRun, setAutoRun] = useState(false);
+  const [chatPrompt, setChatPrompt] = useState("");
+  const [chatResponse, setChatResponse] = useState("");
+  const [isChattingLoading, setIsChattingLoading] = useState(false);
   const controllerRef = useRef<AIInfluencerController | null>(null);
 
   useEffect(() => {
-    // Initialize the controller on component mount
     if (!controllerRef.current) {
       controllerRef.current = new AIInfluencerController();
       
-      // Register event listeners
       controllerRef.current.on('log', (message: string) => {
         addLog(message);
       });
@@ -41,14 +43,12 @@ const TestAI = () => {
       controllerRef.current.on('activityCompleted', (result: ActivityResult, activityName: string) => {
         const newEnergy = controllerRef.current?.getBrain().getState().energy || 0;
         
-        // Update activity status
         setActivities(prev => prev.map(a => 
           a.name === activityName 
             ? { ...a, status: "completed (on cooldown)" } 
             : a
         ));
         
-        // Update brain state display
         setBrainState(prev => ({
           ...prev,
           energy: newEnergy,
@@ -64,7 +64,6 @@ const TestAI = () => {
         }));
       });
       
-      // Load available activities to display
       const availableActivities = controllerRef.current.getBrain().getAvailableActivities();
       setActivities(availableActivities.map(a => ({ 
         name: a.name, 
@@ -72,18 +71,15 @@ const TestAI = () => {
         requiredApiKeys: a.requiredApiKeys 
       })));
       
-      // Load integrations
       setIntegrations(controllerRef.current.getBrain().getAvailableIntegrations());
       
-      // Load API key statuses
       updateApiKeyStatuses();
     }
   }, []);
 
   useEffect(() => {
-    // Start or stop auto-running based on autoRun state
     if (autoRun && !isRunning && controllerRef.current) {
-      controllerRef.current.start(10000); // Run every 10 seconds
+      controllerRef.current.start(10000);
       setIsRunning(true);
     } else if (!autoRun && isRunning && controllerRef.current) {
       controllerRef.current.stop();
@@ -110,7 +106,6 @@ const TestAI = () => {
     addLog("Starting AI influencer test...");
     
     try {
-      // Get available activities
       const brain = controllerRef.current.getBrain();
       const availableActivities = brain.getAvailableActivities();
       setActivities(availableActivities.map(a => ({ 
@@ -119,7 +114,6 @@ const TestAI = () => {
         requiredApiKeys: a.requiredApiKeys 
       })));
       
-      // Run a single activity cycle
       await controllerRef.current.runActivityCycle();
     } catch (error) {
       addLog(`Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -139,10 +133,8 @@ const TestAI = () => {
     
     if (success) {
       addLog(`Successfully set API key "${apiKeyName}" for ${selectedActivity}`);
-      // Reset form
       setApiKeyValue("");
       
-      // Update API key statuses
       updateApiKeyStatuses();
     } else {
       addLog(`Failed to set API key "${apiKeyName}" for ${selectedActivity}`);
@@ -154,6 +146,36 @@ const TestAI = () => {
     
     addLog(`Manually executing ${activityName}...`);
     await controllerRef.current.executeActivity(activityName);
+  };
+
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatPrompt.trim() || !controllerRef.current) return;
+    
+    setIsChattingLoading(true);
+    setChatResponse("");
+    addLog(`Sending chat prompt: "${chatPrompt}"`);
+    
+    try {
+      const result = await controllerRef.current.executeActivity("chat", {
+        prompt: chatPrompt,
+        systemPrompt: "You are an AI influencer assistant. Be helpful, concise, and friendly."
+      });
+      
+      if (result.success && result.data) {
+        setChatResponse(result.data.content);
+        addLog(`Chat response received from model: ${result.data.model}`);
+      } else {
+        setChatResponse(`Error: ${result.error || "Unknown error occurred"}`);
+        addLog(`Chat error: ${result.error}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setChatResponse(`Error: ${errorMessage}`);
+      addLog(`Chat exception: ${errorMessage}`);
+    } finally {
+      setIsChattingLoading(false);
+    }
   };
 
   return (
@@ -324,7 +346,6 @@ const TestAI = () => {
               </div>
             </div>
             
-            {/* API Key Status Section */}
             {Object.keys(apiKeyStatuses).length > 0 && (
               <div className="mt-4 pt-4 border-t">
                 <h3 className="font-semibold mb-2">API Key Status</h3>
@@ -348,22 +369,41 @@ const TestAI = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <Card className="p-6 md:col-span-2">
-            <h2 className="text-xl font-semibold mb-4">System Logs</h2>
-            <ScrollArea className="h-[400px] border rounded-md p-4 bg-black text-green-400 font-mono text-sm">
-              {logs.length > 0 ? (
-                logs.map((log, index) => (
-                  <div key={index} className="py-1">
-                    <span className="text-gray-500">[{new Date().toISOString()}]</span> {log}
-                  </div>
-                ))
-              ) : (
-                <div className="text-gray-500 dark:text-gray-400 italic">
-                  No logs yet. Run the test to see output here.
-                </div>
-              )}
-            </ScrollArea>
+            <h2 className="text-xl font-semibold mb-4">Test Chat Activity</h2>
+            <form onSubmit={handleChatSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="chat-prompt">Enter prompt</Label>
+                <Textarea
+                  id="chat-prompt"
+                  placeholder="Type your message here..."
+                  value={chatPrompt}
+                  onChange={(e) => setChatPrompt(e.target.value)}
+                  className="min-h-[100px]"
+                />
+              </div>
+              <Button type="submit" disabled={isChattingLoading || !chatPrompt.trim()}>
+                {isChattingLoading ? "Sending..." : "Send Message"}
+              </Button>
+            </form>
+            
+            {chatResponse && (
+              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+                <h3 className="font-medium mb-2">Response:</h3>
+                <p className="whitespace-pre-wrap">{chatResponse}</p>
+              </div>
+            )}
+            
+            {!apiKeyStatuses["chat"]?.["OPENAI"] && (
+              <Alert className="mt-4">
+                <AlertTitle>API Key Required</AlertTitle>
+                <AlertDescription>
+                  You need to set an OpenAI API key to use the chat activity. Click "Configure API Keys" 
+                  to add your key.
+                </AlertDescription>
+              </Alert>
+            )}
           </Card>
           
           <Card className="p-6">
@@ -400,6 +440,25 @@ const TestAI = () => {
               ) : (
                 <div className="text-gray-500 dark:text-gray-400 italic">
                   No activities loaded. Run the test to see available activities.
+                </div>
+              )}
+            </ScrollArea>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="p-6 md:col-span-2">
+            <h2 className="text-xl font-semibold mb-4">System Logs</h2>
+            <ScrollArea className="h-[400px] border rounded-md p-4 bg-black text-green-400 font-mono text-sm">
+              {logs.length > 0 ? (
+                logs.map((log, index) => (
+                  <div key={index} className="py-1">
+                    <span className="text-gray-500">[{new Date().toISOString()}]</span> {log}
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-500 dark:text-gray-400 italic">
+                  No logs yet. Run the test to see output here.
                 </div>
               )}
             </ScrollArea>
