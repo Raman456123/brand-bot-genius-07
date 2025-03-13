@@ -2,6 +2,7 @@
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import { Toaster } from "@/components/ui/toaster"
 
 // Polyfill for localStorage if running in browser environment without it
 if (typeof window !== 'undefined' && !window.localStorage) {
@@ -27,4 +28,9 @@ if (typeof window !== 'undefined' && !window.localStorage) {
   (window as any).localStorage = localStoragePolyfill;
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <>
+    <App />
+    <Toaster />
+  </>
+);

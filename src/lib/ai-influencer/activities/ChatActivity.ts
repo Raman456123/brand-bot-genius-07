@@ -8,10 +8,10 @@ export class ChatActivity implements Activity {
   public name: string = "chat";
   public description: string = "Communicates using LLM APIs to generate responses";
   public energyCost: number = 0.2;
-  public cooldown: number = 60000; // 1 minute cooldown
+  public cooldown: number = 60; // 1 minute cooldown in seconds
   public requiredApiKeys: string[] = ["OPENAI"]; // Changed from LITELLM to OPENAI for web context
   
-  private modelName: string = "gpt-4";
+  private modelName: string = "gpt-4o-mini";
   private systemPrompt: string = "You are a helpful AI assistant.";
   private maxTokens: number = 150;
   
@@ -29,6 +29,7 @@ export class ChatActivity implements Activity {
   public async canRun(apiKeys: Record<string, string>, state: any): Promise<boolean> {
     // Check if energy is sufficient
     if (state.energy < this.energyCost) {
+      console.log("Not enough energy to run chat activity");
       return false;
     }
     
@@ -41,7 +42,12 @@ export class ChatActivity implements Activity {
     
     // Check if API key is available - either directly or from skill config
     const apiKey = apiKeys["OPENAI"] || skillConfig?.api_key_mapping?.["OPENAI"] || null;
-    return !!apiKey;
+    if (!apiKey) {
+      console.log("No API key available for OpenAI chat");
+      return false;
+    }
+    
+    return true;
   }
   
   /**
@@ -60,6 +66,8 @@ export class ChatActivity implements Activity {
           data: null
         };
       }
+      
+      console.log(`Starting chat activity with prompt: ${params.prompt.substring(0, 50)}...`);
       
       const messages: ChatMessage[] = [];
       
@@ -93,16 +101,21 @@ export class ChatActivity implements Activity {
         modelToUse = state.skillsConfig.lite_llm.model_name;
       }
       
+      console.log(`Using model: ${modelToUse}`);
+      
       // Call OpenAI API
       const response = await this.callOpenAI(apiKey, messages, modelToUse);
       
       if (!response.success) {
+        console.error(`Error in chat activity: ${response.error}`);
         return {
           success: false,
           error: response.error,
           data: null
         };
       }
+      
+      console.log(`Successfully received response from chat API`);
       
       return {
         success: true,
@@ -111,7 +124,12 @@ export class ChatActivity implements Activity {
           model: response.data.model,
           finishReason: response.data.finishReason
         },
-        error: null
+        error: null,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          model: response.data.model,
+          promptLength: params.prompt.length
+        }
       };
     } catch (error) {
       console.error("Error in chat activity:", error);
@@ -136,6 +154,8 @@ export class ChatActivity implements Activity {
     error?: string 
   }> {
     try {
+      console.log(`Making API call to OpenAI with model ${modelName || this.modelName}`);
+      
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -152,9 +172,19 @@ export class ChatActivity implements Activity {
       
       if (!response.ok) {
         const errorData = await response.json();
+        const errorMessage = errorData.error?.message || `API request failed with status ${response.status}`;
+        console.error(`OpenAI API error: ${errorMessage}`);
+        
+        if (response.status === 401) {
+          return {
+            success: false,
+            error: `Authentication Error: Invalid API key or unauthorized access. Please check your OpenAI API key.`
+          };
+        }
+        
         return {
           success: false,
-          error: errorData.error?.message || `API request failed with status ${response.status}`
+          error: errorMessage
         };
       }
       
@@ -176,9 +206,11 @@ export class ChatActivity implements Activity {
         }
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error during API call";
+      console.error(`Error calling OpenAI API: ${errorMessage}`);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error during API call"
+        error: errorMessage
       };
     }
   }

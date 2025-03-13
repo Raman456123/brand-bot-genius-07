@@ -47,6 +47,7 @@ export class DailyThoughtActivity implements Activity {
       });
       
       if (!response.success) {
+        console.error(`Daily thought generation failed: ${response.error}`);
         return {
           success: false,
           error: response.error,
@@ -56,6 +57,7 @@ export class DailyThoughtActivity implements Activity {
       
       // Extract the thought and return success
       const thought = response.data.content;
+      console.log(`Successfully generated daily thought: ${thought.substring(0, 50)}...`);
       
       const result: DailyThoughtResult = {
         thought,
@@ -69,7 +71,8 @@ export class DailyThoughtActivity implements Activity {
         error: null,
         metadata: {
           timestamp: new Date().toISOString(),
-          model: response.data.model
+          model: response.data.model,
+          thoughtLength: thought.length
         }
       };
       

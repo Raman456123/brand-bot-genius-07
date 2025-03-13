@@ -1,187 +1,83 @@
 
 /**
- * Memory management system for storing and retrieving activity history
- * This is a TypeScript adaptation of the Python Memory class
+ * Simple in-memory storage for the activity results
  */
-
-export interface MemoryEntry {
-  timestamp: string;
-  activity_type: string;
-  success: boolean;
-  error: string | null;
-  data: any | null;
-  metadata: Record<string, any>;
-}
-
 export class MemoryManager {
-  private shortTermMemory: MemoryEntry[] = [];
-  private longTermMemory: Record<string, MemoryEntry[]> = {};
+  private activities: any[] = [];
+  private maxActivities: number = 1000;
+  private storageKey: string = "ai_influencer_memory";
   
   constructor() {
-    this.initialize();
-  }
-  
-  /**
-   * Initialize memory system
-   */
-  initialize(): void {
-    this.loadMemory();
-  }
-  
-  /**
-   * Load memory from localStorage
-   */
-  private loadMemory(): void {
-    try {
-      const memoryData = localStorage.getItem('ai_influencer_memory');
-      
-      if (memoryData) {
-        const data = JSON.parse(memoryData);
-        
-        if (typeof data === 'object') {
-          this.longTermMemory = data.longTerm || {};
-          this.shortTermMemory = data.shortTerm || [];
-        } else {
-          console.warn("Invalid memory format, resetting memory");
-          this.longTermMemory = {};
-          this.shortTermMemory = [];
-          this.persist(); // Reset with proper format
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load memory:", error);
-      this.longTermMemory = {};
-      this.shortTermMemory = [];
-    }
+    this.loadFromStorage();
   }
   
   /**
    * Store an activity result in memory
    */
-  storeActivityResult(activityRecord: MemoryEntry): void {
+  public storeActivityResult(activityResult: any): void {
+    // Add the activity result to the beginning of the array
+    this.activities.unshift(activityResult);
+    
+    // If we have more than maxActivities, remove the oldest ones
+    if (this.activities.length > this.maxActivities) {
+      this.activities = this.activities.slice(0, this.maxActivities);
+    }
+    
+    // Save to localStorage
+    this.saveToStorage();
+  }
+  
+  /**
+   * Get recent activities from memory
+   */
+  public getRecentActivities(limit: number = 10, offset: number = 0): any[] {
+    return this.activities.slice(offset, offset + limit);
+  }
+  
+  /**
+   * Get all activities of a specific type
+   */
+  public getActivitiesByType(activityType: string): any[] {
+    return this.activities.filter(activity => activity.activity_type === activityType);
+  }
+  
+  /**
+   * Clear all activities from memory
+   */
+  public clearActivities(): void {
+    this.activities = [];
+    this.saveToStorage();
+  }
+  
+  /**
+   * Get activity count
+   */
+  public getActivityCount(): number {
+    return this.activities.length;
+  }
+  
+  /**
+   * Save activities to localStorage
+   */
+  private saveToStorage(): void {
     try {
-      // Store standardized activity record
-      this.shortTermMemory.push(activityRecord);
-      this.consolidateMemory();
-      this.persist(); // Persist after each update
-      console.log(`Stored activity result for ${activityRecord.activity_type}`);
+      localStorage.setItem(this.storageKey, JSON.stringify(this.activities));
     } catch (error) {
-      console.error("Failed to store activity result:", error);
+      console.error("Error saving memory to storage:", error);
     }
   }
   
   /**
-   * Consolidate short-term memory into long-term memory
+   * Load activities from localStorage
    */
-  private consolidateMemory(): void {
-    if (this.shortTermMemory.length > 100) { // Keep last 100 activities in short-term
-      const olderMemories = this.shortTermMemory.slice(0, -50); // Move older ones to long-term
-      this.shortTermMemory = this.shortTermMemory.slice(-50);
-      
-      for (const memory of olderMemories) {
-        const activityType = memory.activity_type;
-        if (!this.longTermMemory[activityType]) {
-          this.longTermMemory[activityType] = [];
-        }
-        this.longTermMemory[activityType].push(memory);
+  private loadFromStorage(): void {
+    try {
+      const storedActivities = localStorage.getItem(this.storageKey);
+      if (storedActivities) {
+        this.activities = JSON.parse(storedActivities);
       }
-    }
-  }
-  
-  /**
-   * Get recent activities from memory with success/failure status
-   */
-  getRecentActivities(limit: number = 10, offset: number = 0): MemoryEntry[] {
-    // Sort all activities by timestamp in descending order (most recent first)
-    const allActivities = [...this.shortTermMemory].sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-    
-    // Apply pagination
-    const paginatedActivities = allActivities.slice(offset, offset + limit);
-    
-    // Format timestamps for display
-    return paginatedActivities.map(activity => ({
-      ...activity,
-      timestamp: this.formatTimestamp(activity.timestamp)
-    }));
-  }
-  
-  /**
-   * Format ISO timestamp to human-readable format
-   */
-  private formatTimestamp(timestampStr: string): string {
-    try {
-      const dt = new Date(timestampStr);
-      return dt.toLocaleString();
     } catch (error) {
-      return timestampStr;
+      console.error("Error loading memory from storage:", error);
     }
-  }
-  
-  /**
-   * Get history of specific activity type
-   */
-  getActivityHistory(activityType: string): MemoryEntry[] {
-    const activities = this.longTermMemory[activityType] || [];
-    return activities.map(activity => ({
-      ...activity,
-      timestamp: this.formatTimestamp(activity.timestamp)
-    }));
-  }
-  
-  /**
-   * Persist memory to localStorage
-   */
-  persist(): void {
-    try {
-      const memoryData = {
-        shortTerm: this.shortTermMemory,
-        longTerm: this.longTermMemory
-      };
-      
-      localStorage.setItem('ai_influencer_memory', JSON.stringify(memoryData));
-    } catch (error) {
-      console.error("Failed to persist memory:", error);
-    }
-  }
-  
-  /**
-   * Clear all memory
-   */
-  clear(): void {
-    this.shortTermMemory = [];
-    this.longTermMemory = {};
-    this.persist();
-  }
-  
-  /**
-   * Get total number of activities in memory
-   */
-  getActivityCount(): number {
-    return this.shortTermMemory.length + 
-      Object.values(this.longTermMemory).reduce(
-        (sum, activities) => sum + activities.length, 0
-      );
-  }
-  
-  /**
-   * Get formatted timestamp of the last activity
-   */
-  getLastActivityTimestamp(): string {
-    if (this.shortTermMemory.length === 0) {
-      return "No activities recorded";
-    }
-    
-    const lastActivity = this.shortTermMemory.reduce(
-      (latest, current) => {
-        const latestTime = new Date(latest.timestamp).getTime();
-        const currentTime = new Date(current.timestamp).getTime();
-        return currentTime > latestTime ? current : latest;
-      },
-      this.shortTermMemory[0]
-    );
-    
-    return this.formatTimestamp(lastActivity.timestamp);
   }
 }

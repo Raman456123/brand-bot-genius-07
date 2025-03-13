@@ -1,30 +1,32 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AIInfluencerController } from "@/lib/ai-influencer/controller";
-import { Activity, Integration, ActivityResult, WebScrapingResult, TwitterPostResult } from "@/lib/ai-influencer/types";
+import { Activity, ActivityResult } from "@/lib/ai-influencer/types";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
+import { ActivityLogs } from "@/components/ai-influencer/ActivityLogs";
+import { useToast } from "@/hooks/use-toast";
 
 const TestAI = () => {
   const [isRunning, setIsRunning] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [activities, setActivities] = useState<{name: string, status: string, requiredApiKeys?: string[]}[]>([]);
   const [brainState, setBrainState] = useState({
     energy: 1.0,
     mood: "neutral",
-    lastActivity: "none"
+    lastActivity: "none",
+    lastActivityTimestamp: null
   });
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
   const [apiKeyValue, setApiKeyValue] = useState("");
   const [apiKeyName, setApiKeyName] = useState("");
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, Record<string, boolean>>>({});
   const [autoRun, setAutoRun] = useState(false);
   const [chatPrompt, setChatPrompt] = useState("");
@@ -35,15 +37,7 @@ const TestAI = () => {
   const [generatedImageUrl, setGeneratedImageUrl] = useState("");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   
-  const [scrapingUrl, setScrapingUrl] = useState("");
-  const [scrapeResults, setScrapeResults] = useState<WebScrapingResult | null>(null);
-  const [isScrapingLoading, setIsScrapingLoading] = useState(false);
-  
-  const [tweetText, setTweetText] = useState("");
-  const [tweetMediaUrls, setTweetMediaUrls] = useState("");
-  const [tweetResult, setTweetResult] = useState<TwitterPostResult | null>(null);
-  const [isPostingTweet, setIsPostingTweet] = useState(false);
-  
+  const { toast } = useToast();
   const controllerRef = useRef<AIInfluencerController | null>(null);
 
   useEffect(() => {
@@ -51,13 +45,28 @@ const TestAI = () => {
       controllerRef.current = new AIInfluencerController();
       
       controllerRef.current.on('log', (message: string) => {
-        addLog(message);
+        addLog({
+          timestamp: new Date().toISOString(),
+          activity_type: message,
+          success: true,
+          error: null,
+          data: null,
+          level: 'info'
+        });
       });
       
-      controllerRef.current.on('activityCompleted', (result: ActivityResult) => {
+      controllerRef.current.on('activityCompleted', (result: ActivityResult, activityName: string) => {
         const newEnergy = controllerRef.current?.getBrain().getState().energy || 0;
+        const activityResult = {
+          timestamp: new Date().toISOString(),
+          activity_type: activityName,
+          success: result.success,
+          error: result.error,
+          data: result.data,
+          level: result.success ? 'info' : 'error'
+        };
         
-        const activityName = controllerRef.current?.getBrain().getState().lastActivity || "";
+        addLog(activityResult);
         
         setActivities(prev => prev.map(a => 
           a.name === activityName 
@@ -68,8 +77,33 @@ const TestAI = () => {
         setBrainState(prev => ({
           ...prev,
           energy: newEnergy,
-          lastActivity: activityName
+          lastActivity: activityName,
+          lastActivityTimestamp: new Date().toISOString()
         }));
+        
+        if (result.success) {
+          toast({
+            title: `Activity Completed: ${activityName}`,
+            description: `Successfully executed ${activityName}`,
+          });
+        } else {
+          toast({
+            title: `Activity Failed: ${activityName}`,
+            description: result.error || "Unknown error occurred",
+            variant: "destructive"
+          });
+        }
+      });
+      
+      controllerRef.current.on('activitySelected', (activity: Activity) => {
+        addLog({
+          timestamp: new Date().toISOString(),
+          activity_type: `Selected activity: ${activity.name}`,
+          success: true,
+          error: null,
+          data: null,
+          level: 'info'
+        });
       });
       
       controllerRef.current.on('stateChanged', (state) => {
@@ -80,6 +114,7 @@ const TestAI = () => {
         }));
       });
       
+      // Load initial activities
       const availableActivities = controllerRef.current.getBrain().getAvailableActivities();
       setActivities(availableActivities.map(a => ({ 
         name: a.name, 
@@ -87,21 +122,29 @@ const TestAI = () => {
         requiredApiKeys: a.requiredApiKeys 
       })));
       
-      setIntegrations(controllerRef.current.getBrain().getAvailableIntegrations());
-      
       updateApiKeyStatuses();
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (autoRun && !isRunning && controllerRef.current) {
       controllerRef.current.start(10000);
       setIsRunning(true);
+      
+      toast({
+        title: "AI Influencer Started",
+        description: "The AI will automatically select and run activities",
+      });
     } else if (!autoRun && isRunning && controllerRef.current) {
       controllerRef.current.stop();
       setIsRunning(false);
+      
+      toast({
+        title: "AI Influencer Stopped",
+        description: "Automatic activity selection has been stopped",
+      });
     }
-  }, [autoRun, isRunning]);
+  }, [autoRun, isRunning, toast]);
 
   const updateApiKeyStatuses = async () => {
     if (controllerRef.current) {
@@ -111,15 +154,21 @@ const TestAI = () => {
     }
   };
 
-  const addLog = (message: string) => {
-    setLogs(prev => [...prev, message]);
+  const addLog = (logMessage: any) => {
+    setLogs(prev => [logMessage, ...prev]);
   };
 
   const handleTest = async () => {
     if (!controllerRef.current) return;
     
-    setIsRunning(true);
-    addLog("Starting AI influencer test...");
+    addLog({
+      timestamp: new Date().toISOString(),
+      activity_type: "Starting AI influencer test...",
+      success: true,
+      error: null,
+      data: null,
+      level: 'info'
+    });
     
     try {
       const brain = controllerRef.current.getBrain();
@@ -131,16 +180,36 @@ const TestAI = () => {
       })));
       
       await controllerRef.current.runActivityCycle();
+      
+      toast({
+        title: "Test Complete",
+        description: "Successfully ran a single activity cycle",
+      });
     } catch (error) {
-      addLog(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setIsRunning(false);
+      addLog({
+        timestamp: new Date().toISOString(),
+        activity_type: "Error running test",
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        data: null,
+        level: 'error'
+      });
+      
+      toast({
+        title: "Test Failed",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive"
+      });
     }
   };
 
   const handleSetApiKey = async () => {
     if (!controllerRef.current || !selectedActivity || !apiKeyName || !apiKeyValue) {
-      addLog("Cannot set API key: missing required information");
+      toast({
+        title: "Cannot set API key",
+        description: "Missing required information",
+        variant: "destructive"
+      });
       return;
     }
     
@@ -148,20 +217,53 @@ const TestAI = () => {
     const success = await brain.setApiKey(selectedActivity, apiKeyName, apiKeyValue);
     
     if (success) {
-      addLog(`Successfully set API key "${apiKeyName}" for ${selectedActivity}`);
+      addLog({
+        timestamp: new Date().toISOString(),
+        activity_type: `Set API key "${apiKeyName}" for ${selectedActivity}`,
+        success: true,
+        error: null,
+        data: null,
+        level: 'info'
+      });
+      
       setApiKeyValue("");
       
       updateApiKeyStatuses();
+      
+      toast({
+        title: "API Key Saved",
+        description: `Successfully set API key "${apiKeyName}" for ${selectedActivity}`
+      });
     } else {
-      addLog(`Failed to set API key "${apiKeyName}" for ${selectedActivity}`);
+      toast({
+        title: "Failed to Save API Key",
+        description: `Could not set API key "${apiKeyName}" for ${selectedActivity}`,
+        variant: "destructive"
+      });
     }
   };
 
   const handleExecuteSpecificActivity = async (activityName: string) => {
     if (!controllerRef.current) return;
     
-    addLog(`Manually executing ${activityName}...`);
-    await controllerRef.current.executeActivity(activityName);
+    addLog({
+      timestamp: new Date().toISOString(),
+      activity_type: `Manually executing ${activityName}...`,
+      success: true,
+      error: null,
+      data: null,
+      level: 'info'
+    });
+    
+    try {
+      await controllerRef.current.executeActivity(activityName);
+    } catch (error) {
+      toast({
+        title: `Failed to Execute ${activityName}`,
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive"
+      });
+    }
   };
 
   const handleChatSubmit = async (e: React.FormEvent) => {
@@ -170,7 +272,15 @@ const TestAI = () => {
     
     setIsChattingLoading(true);
     setChatResponse("");
-    addLog(`Sending chat prompt: "${chatPrompt}"`);
+    
+    addLog({
+      timestamp: new Date().toISOString(),
+      activity_type: `Sending chat prompt`,
+      success: true,
+      error: null,
+      data: { message: chatPrompt.substring(0, 100) + (chatPrompt.length > 100 ? "..." : "") },
+      level: 'info'
+    });
     
     try {
       const result = await controllerRef.current.executeActivity("chat", {
@@ -178,17 +288,41 @@ const TestAI = () => {
         systemPrompt: "You are an AI influencer assistant. Be helpful, concise, and friendly."
       });
       
-      if (result.success && result.data) {
+      if (result?.success && result.data) {
         setChatResponse(result.data.content);
-        addLog(`Chat response received from model: ${result.data.model}`);
+        
+        addLog({
+          timestamp: new Date().toISOString(),
+          activity_type: `Chat response received`,
+          success: true,
+          error: null,
+          data: { model: result.data.model },
+          level: 'info'
+        });
       } else {
-        setChatResponse(`Error: ${result.error || "Unknown error occurred"}`);
-        addLog(`Chat error: ${result.error}`);
+        setChatResponse(`Error: ${result?.error || "Unknown error occurred"}`);
+        
+        addLog({
+          timestamp: new Date().toISOString(),
+          activity_type: `Chat error`,
+          success: false,
+          error: result?.error || "Unknown error occurred",
+          data: null,
+          level: 'error'
+        });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       setChatResponse(`Error: ${errorMessage}`);
-      addLog(`Chat exception: ${errorMessage}`);
+      
+      addLog({
+        timestamp: new Date().toISOString(),
+        activity_type: `Chat exception`,
+        success: false,
+        error: errorMessage,
+        data: null,
+        level: 'error'
+      });
     } finally {
       setIsChattingLoading(false);
     }
@@ -200,7 +334,15 @@ const TestAI = () => {
     
     setIsGeneratingImage(true);
     setGeneratedImageUrl("");
-    addLog(`Generating image with prompt: "${imagePrompt}"`);
+    
+    addLog({
+      timestamp: new Date().toISOString(),
+      activity_type: `Generating image`,
+      success: true,
+      error: null,
+      data: { prompt: imagePrompt.substring(0, 100) + (imagePrompt.length > 100 ? "..." : "") },
+      level: 'info'
+    });
     
     try {
       const result = await controllerRef.current.executeActivity("generate_image", {
@@ -209,77 +351,40 @@ const TestAI = () => {
         format: "png"
       });
       
-      if (result.success && result.data) {
+      if (result?.success && result.data) {
         setGeneratedImageUrl(result.data.url);
-        addLog(`Image generated successfully! Generation ID: ${result.data.generationId}`);
+        
+        addLog({
+          timestamp: new Date().toISOString(),
+          activity_type: `Image generated`,
+          success: true,
+          error: null,
+          data: { generationId: result.data.generationId },
+          level: 'info'
+        });
       } else {
-        addLog(`Image generation error: ${result.error}`);
+        addLog({
+          timestamp: new Date().toISOString(),
+          activity_type: `Image generation error`,
+          success: false,
+          error: result?.error || "Unknown error occurred",
+          data: null,
+          level: 'error'
+        });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      addLog(`Image generation exception: ${errorMessage}`);
+      
+      addLog({
+        timestamp: new Date().toISOString(),
+        activity_type: `Image generation exception`,
+        success: false,
+        error: errorMessage,
+        data: null,
+        level: 'error'
+      });
     } finally {
       setIsGeneratingImage(false);
-    }
-  };
-
-  const handleWebScrapingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!scrapingUrl.trim() || !controllerRef.current) return;
-    
-    setIsScrapingLoading(true);
-    setScrapeResults(null);
-    addLog(`Scraping URL: "${scrapingUrl}"`);
-    
-    try {
-      const result = await controllerRef.current.executeActivity("scrape_website", {
-        url: scrapingUrl,
-        parseHtml: true
-      });
-      
-      if (result?.success && result.data) {
-        setScrapeResults(result.data as WebScrapingResult);
-        addLog(`Website scraped successfully! Status code: ${result.data.statusCode}`);
-      } else {
-        addLog(`Web scraping error: ${result?.error || "Unknown error occurred"}`);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      addLog(`Web scraping exception: ${errorMessage}`);
-    } finally {
-      setIsScrapingLoading(false);
-    }
-  };
-
-  const handleTweetSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tweetText.trim() || !controllerRef.current) return;
-    
-    setIsPostingTweet(true);
-    setTweetResult(null);
-    addLog(`Posting tweet: "${tweetText}"`);
-    
-    const mediaUrls = tweetMediaUrls.trim() 
-      ? tweetMediaUrls.split("\n").filter(url => url.trim().length > 0)
-      : [];
-    
-    try {
-      const result = await controllerRef.current.executeActivity("post_tweet", {
-        text: tweetText,
-        mediaUrls: mediaUrls
-      });
-      
-      if (result.success && result.data) {
-        setTweetResult(result.data as TwitterPostResult);
-        addLog(`Tweet posted successfully! Tweet ID: ${result.data.tweetId}`);
-      } else {
-        addLog(`Tweet posting error: ${result.error}`);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      addLog(`Tweet posting exception: ${errorMessage}`);
-    } finally {
-      setIsPostingTweet(false);
     }
   };
 
@@ -292,7 +397,7 @@ const TestAI = () => {
           <Card className="p-6 md:col-span-2">
             <h2 className="text-xl font-semibold mb-4">Run Influencer Brain</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-4">
-              This interface demonstrates a simplified version of the AI influencer brain
+              This interface demonstrates a simplified version of the Pippin AI influencer brain
               that selects activities based on state and constraints.
             </p>
             
@@ -324,111 +429,55 @@ const TestAI = () => {
                   <DialogHeader>
                     <DialogTitle>Configure API Keys</DialogTitle>
                   </DialogHeader>
-                  <Tabs defaultValue="activities">
-                    <TabsList className="grid w-full grid-cols-2 mb-4">
-                      <TabsTrigger value="activities">Activities</TabsTrigger>
-                      <TabsTrigger value="integrations">Integrations</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="activities" className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="activity">Select Activity</Label>
-                        <select
-                          id="activity"
-                          className="w-full p-2 border rounded-md"
-                          value={selectedActivity || ""}
-                          onChange={(e) => setSelectedActivity(e.target.value)}
-                        >
-                          <option value="">-- Select Activity --</option>
-                          {activities.filter(a => a.requiredApiKeys && a.requiredApiKeys.length > 0).map((activity, i) => (
-                            <option key={i} value={activity.name}>
-                              {activity.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="activity">Select Activity</Label>
+                      <select
+                        id="activity"
+                        className="w-full p-2 border rounded-md"
+                        value={selectedActivity || ""}
+                        onChange={(e) => setSelectedActivity(e.target.value)}
+                      >
+                        <option value="">-- Select Activity --</option>
+                        {activities.filter(a => a.requiredApiKeys && a.requiredApiKeys.length > 0).map((activity, i) => (
+                          <option key={i} value={activity.name}>
+                            {activity.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                      {selectedActivity && (
-                        <>
-                          <div className="space-y-2">
-                            <Label htmlFor="apiKeyName">API Key Name</Label>
-                            <Input
-                              id="apiKeyName"
-                              value={apiKeyName}
-                              onChange={(e) => setApiKeyName(e.target.value)}
-                              placeholder="e.g., trendsapi"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="apiKeyValue">API Key Value</Label>
-                            <Input
-                              id="apiKeyValue"
-                              value={apiKeyValue}
-                              onChange={(e) => setApiKeyValue(e.target.value)}
-                              placeholder="Enter API key value"
-                              type="password"
-                            />
-                          </div>
-                          <Button 
-                            onClick={handleSetApiKey}
-                            disabled={!apiKeyName || !apiKeyValue}
-                            className="w-full"
-                          >
-                            Save API Key
-                          </Button>
-                        </>
-                      )}
-                    </TabsContent>
-                    
-                    <TabsContent value="integrations" className="space-y-4">
-                      <ScrollArea className="h-[300px] border rounded-md p-4">
-                        {integrations.length > 0 ? (
-                          <ul className="space-y-4">
-                            {integrations.map((integration, i) => (
-                              <li key={i} className="p-3 border rounded-md">
-                                <div className="flex justify-between items-center mb-2">
-                                  <h3 className="font-semibold">{integration.displayName}</h3>
-                                  <span className={`text-sm px-2 py-1 rounded-full ${
-                                    integration.connected ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                                  }`}>
-                                    {integration.connected ? "Connected" : "Not Connected"}
-                                  </span>
-                                </div>
-                                <div className="text-sm text-gray-500 mb-2">
-                                  Authentication methods: {integration.authModes.join(", ")}
-                                </div>
-                                {integration.authModes.includes("API_KEY") && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="w-full mt-2"
-                                    onClick={() => {
-                                      setSelectedActivity(integration.name);
-                                      setApiKeyName("api_key");
-                                    }}
-                                  >
-                                    Configure API Key
-                                  </Button>
-                                )}
-                                {integration.authModes.includes("OAUTH2") && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="w-full mt-2"
-                                    disabled
-                                  >
-                                    Connect via OAuth (Coming Soon)
-                                  </Button>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <div className="text-gray-500 italic">No integrations available</div>
-                        )}
-                      </ScrollArea>
-                    </TabsContent>
-                  </Tabs>
+                    {selectedActivity && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="apiKeyName">API Key Name</Label>
+                          <Input
+                            id="apiKeyName"
+                            value={apiKeyName}
+                            onChange={(e) => setApiKeyName(e.target.value)}
+                            placeholder="e.g., OPENAI"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="apiKeyValue">API Key Value</Label>
+                          <Input
+                            id="apiKeyValue"
+                            value={apiKeyValue}
+                            onChange={(e) => setApiKeyValue(e.target.value)}
+                            placeholder="Enter API key value"
+                            type="password"
+                          />
+                        </div>
+                        <Button 
+                          onClick={handleSetApiKey}
+                          disabled={!apiKeyName || !apiKeyValue}
+                          className="w-full"
+                        >
+                          Save API Key
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </DialogContent>
               </Dialog>
             </div>
@@ -449,6 +498,14 @@ const TestAI = () => {
                 <span className="text-gray-500 dark:text-gray-400">Last Activity:</span>
                 <span className="font-medium">{brainState.lastActivity}</span>
               </div>
+              {brainState.lastActivityTimestamp && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Last Activity Time:</span>
+                  <span className="font-medium">
+                    {new Date(brainState.lastActivityTimestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+              )}
             </div>
             
             {Object.keys(apiKeyStatuses).length > 0 && (
@@ -480,8 +537,6 @@ const TestAI = () => {
               <TabsList className="mb-4">
                 <TabsTrigger value="chat">Chat</TabsTrigger>
                 <TabsTrigger value="image">Image Generation</TabsTrigger>
-                <TabsTrigger value="scraping">Web Scraping</TabsTrigger>
-                <TabsTrigger value="twitter">Twitter</TabsTrigger>
               </TabsList>
               
               <TabsContent value="chat">
@@ -561,130 +616,6 @@ const TestAI = () => {
                   </Alert>
                 )}
               </TabsContent>
-              
-              <TabsContent value="scraping">
-                <h2 className="text-xl font-semibold mb-4">Test Web Scraping Activity</h2>
-                <form onSubmit={handleWebScrapingSubmit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="scraping-url">Website URL</Label>
-                    <Input
-                      id="scraping-url"
-                      type="url"
-                      placeholder="https://example.com"
-                      value={scrapingUrl}
-                      onChange={(e) => setScrapingUrl(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" disabled={isScrapingLoading || !scrapingUrl.trim()}>
-                    {isScrapingLoading ? "Scraping..." : "Scrape Website"}
-                  </Button>
-                </form>
-                
-                {scrapeResults && (
-                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
-                    <h3 className="font-medium mb-2">Scraping Results:</h3>
-                    <div className="space-y-2">
-                      <div>
-                        <span className="font-semibold">Status:</span> {scrapeResults.statusCode}
-                      </div>
-                      {scrapeResults.parsed && (
-                        <>
-                          <div>
-                            <span className="font-semibold">Title:</span> {scrapeResults.parsed.title || 'No title found'}
-                          </div>
-                          <div>
-                            <span className="font-semibold">Content Preview:</span>
-                            <div className="mt-1 p-2 bg-gray-200 dark:bg-gray-700 rounded text-sm max-h-40 overflow-auto">
-                              {scrapeResults.parsed.bodyText}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                      <div>
-                        <span className="font-semibold">Full HTML:</span>
-                        <details>
-                          <summary className="cursor-pointer text-blue-500 hover:text-blue-700">
-                            Click to expand
-                          </summary>
-                          <pre className="mt-1 p-2 bg-gray-200 dark:bg-gray-700 rounded text-xs max-h-40 overflow-auto">
-                            {scrapeResults.content.substring(0, 2000)}
-                            {scrapeResults.content.length > 2000 ? '...(truncated)' : ''}
-                          </pre>
-                        </details>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </TabsContent>
-              
-              <TabsContent value="twitter">
-                <h2 className="text-xl font-semibold mb-4">Test Twitter API</h2>
-                <form onSubmit={handleTweetSubmit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="tweet-text">Tweet Content</Label>
-                    <Textarea
-                      id="tweet-text"
-                      placeholder="What's happening?"
-                      value={tweetText}
-                      onChange={(e) => setTweetText(e.target.value)}
-                      className="min-h-[100px]"
-                      maxLength={280}
-                    />
-                    <div className="text-xs text-right mt-1 text-gray-500">
-                      {tweetText.length}/280
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="tweet-media">Media URLs (one per line, optional)</Label>
-                    <Textarea
-                      id="tweet-media"
-                      placeholder="https://example.com/image1.jpg"
-                      value={tweetMediaUrls}
-                      onChange={(e) => setTweetMediaUrls(e.target.value)}
-                      className="min-h-[80px]"
-                    />
-                  </div>
-                  <Button type="submit" disabled={isPostingTweet || !tweetText.trim()}>
-                    {isPostingTweet ? "Posting..." : "Post Tweet"}
-                  </Button>
-                </form>
-                
-                {tweetResult && (
-                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
-                    <h3 className="font-medium mb-2">Tweet Posted:</h3>
-                    <div className="space-y-2">
-                      <p className="whitespace-pre-wrap">{tweetResult.content}</p>
-                      <div>
-                        <span className="font-semibold">Tweet ID:</span> {tweetResult.tweetId}
-                      </div>
-                      <div>
-                        <span className="font-semibold">Media count:</span> {tweetResult.mediaCount}
-                      </div>
-                      <div>
-                        <a 
-                          href={tweetResult.tweetLink} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-700 underline"
-                        >
-                          View Tweet
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {!apiKeyStatuses["post_tweet"]?.["TWITTER_API_KEY"] && (
-                  <Alert className="mt-4">
-                    <AlertTitle>API Key Required</AlertTitle>
-                    <AlertDescription>
-                      You need to set a Twitter API key to use the Twitter activity. Click "Configure API Keys" 
-                      to add your key.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </TabsContent>
             </Tabs>
           </Card>
           
@@ -731,19 +662,7 @@ const TestAI = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="p-6 md:col-span-2">
             <h2 className="text-xl font-semibold mb-4">System Logs</h2>
-            <ScrollArea className="h-[400px] border rounded-md p-4 bg-black text-green-400 font-mono text-sm">
-              {logs.length > 0 ? (
-                logs.map((log, index) => (
-                  <div key={index} className="py-1">
-                    <span className="text-gray-500">[{new Date().toISOString()}]</span> {log}
-                  </div>
-                ))
-              ) : (
-                <div className="text-gray-500 dark:text-gray-400 italic">
-                  No logs yet. Run the test to see output here.
-                </div>
-              )}
-            </ScrollArea>
+            <ActivityLogs logs={logs} />
           </Card>
         </div>
       </div>
