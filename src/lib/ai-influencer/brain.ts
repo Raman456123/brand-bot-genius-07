@@ -10,6 +10,7 @@ import { DailyThoughtActivity } from "./activities/DailyThoughtActivity";
 import { DrawActivity } from "./activities/DrawActivity";
 import { EvaluateActivity } from "./activities/EvaluateActivity";
 import { FetchNewsActivity } from "./activities/FetchNewsActivity";
+import { NapActivity } from "./activities/NapActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -143,6 +144,11 @@ export class AIInfluencerBrain {
       maxArticles: 5
     });
     
+    // Register the nap activity
+    const napActivity = new NapActivity({
+      napMinutes: 15
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -154,6 +160,7 @@ export class AIInfluencerBrain {
     this.activities.push(drawActivity);
     this.activities.push(evaluateActivity);
     this.activities.push(fetchNewsActivity);
+    this.activities.push(napActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({

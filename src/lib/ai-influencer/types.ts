@@ -209,3 +209,11 @@ export interface FetchNewsResult {
   articles: NewsArticle[];
   count: number;
 }
+
+export interface NapOptions {
+  napMinutes?: number;
+}
+
+export interface NapResult {
+  napMinutes: number;
+}
