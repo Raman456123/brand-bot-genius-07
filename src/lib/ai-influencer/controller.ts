@@ -1,4 +1,3 @@
-
 import { Activity, ActivityResult, AIState } from "./types";
 import { AIInfluencerBrain } from "./brain";
 import { MemoryManager } from "./memory";
@@ -130,7 +129,7 @@ export class AIInfluencerController {
       
       // Execute the activity
       this.lastActivityTime = new Date();
-      const result = await this.brain.executeActivity(activity);
+      const result = await this.brain.executeActivity(activity.name);
       
       // Record result in both controller and memory system
       this.activityHistory.push({
@@ -181,7 +180,7 @@ export class AIInfluencerController {
   /**
    * Force execution of a specific activity
    */
-  async executeActivity(activityName: string): Promise<ActivityResult | null> {
+  async executeActivity(activityName: string, params?: any): Promise<ActivityResult | null> {
     const activities = this.brain.getAvailableActivities();
     const activity = activities.find(a => a.name === activityName);
     
@@ -199,7 +198,7 @@ export class AIInfluencerController {
     
     // Execute the activity
     this.lastActivityTime = new Date();
-    const result = await this.brain.executeActivity(activity);
+    const result = await this.brain.executeActivity(activity.name, params);
     
     // Record result in both controller and memory system
     this.activityHistory.push({

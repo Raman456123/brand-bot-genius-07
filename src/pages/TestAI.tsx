@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AIInfluencerController } from "@/lib/ai-influencer/controller";
-import { Activity, Integration, ActivityResult } from "@/lib/ai-influencer/types";
+import { Activity, Integration, ActivityResult, WebScrapingResult } from "@/lib/ai-influencer/types";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,10 +31,13 @@ const TestAI = () => {
   const [chatResponse, setChatResponse] = useState("");
   const [isChattingLoading, setIsChattingLoading] = useState(false);
   
-  // Image generation states
   const [imagePrompt, setImagePrompt] = useState("");
   const [generatedImageUrl, setGeneratedImageUrl] = useState("");
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  
+  const [scrapingUrl, setScrapingUrl] = useState("");
+  const [scrapeResults, setScrapeResults] = useState<WebScrapingResult | null>(null);
+  const [isScrapingLoading, setIsScrapingLoading] = useState(false);
   
   const controllerRef = useRef<AIInfluencerController | null>(null);
 
@@ -50,7 +52,6 @@ const TestAI = () => {
       controllerRef.current.on('activityCompleted', (result: ActivityResult) => {
         const newEnergy = controllerRef.current?.getBrain().getState().energy || 0;
         
-        // Get the activity name from the result
         const activityName = controllerRef.current?.getBrain().getState().lastActivity || "";
         
         setActivities(prev => prev.map(a => 
@@ -214,6 +215,34 @@ const TestAI = () => {
       addLog(`Image generation exception: ${errorMessage}`);
     } finally {
       setIsGeneratingImage(false);
+    }
+  };
+
+  const handleWebScrapingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scrapingUrl.trim() || !controllerRef.current) return;
+    
+    setIsScrapingLoading(true);
+    setScrapeResults(null);
+    addLog(`Scraping URL: "${scrapingUrl}"`);
+    
+    try {
+      const result = await controllerRef.current.executeActivity("scrape_website", {
+        url: scrapingUrl,
+        parseHtml: true
+      });
+      
+      if (result?.success && result.data) {
+        setScrapeResults(result.data as WebScrapingResult);
+        addLog(`Website scraped successfully! Status code: ${result.data.statusCode}`);
+      } else {
+        addLog(`Web scraping error: ${result?.error || "Unknown error occurred"}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`Web scraping exception: ${errorMessage}`);
+    } finally {
+      setIsScrapingLoading(false);
     }
   };
 
@@ -414,6 +443,7 @@ const TestAI = () => {
               <TabsList className="mb-4">
                 <TabsTrigger value="chat">Chat</TabsTrigger>
                 <TabsTrigger value="image">Image Generation</TabsTrigger>
+                <TabsTrigger value="scraping">Web Scraping</TabsTrigger>
               </TabsList>
               
               <TabsContent value="chat">
@@ -491,6 +521,62 @@ const TestAI = () => {
                       to add your key.
                     </AlertDescription>
                   </Alert>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="scraping">
+                <h2 className="text-xl font-semibold mb-4">Test Web Scraping Activity</h2>
+                <form onSubmit={handleWebScrapingSubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="scraping-url">Website URL</Label>
+                    <Input
+                      id="scraping-url"
+                      type="url"
+                      placeholder="https://example.com"
+                      value={scrapingUrl}
+                      onChange={(e) => setScrapingUrl(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" disabled={isScrapingLoading || !scrapingUrl.trim()}>
+                    {isScrapingLoading ? "Scraping..." : "Scrape Website"}
+                  </Button>
+                </form>
+                
+                {scrapeResults && (
+                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+                    <h3 className="font-medium mb-2">Scraping Results:</h3>
+                    <div className="space-y-2">
+                      <div>
+                        <span className="font-semibold">Status:</span> {scrapeResults.statusCode}
+                      </div>
+                      {scrapeResults.parsed && (
+                        <>
+                          <div>
+                            <span className="font-semibold">Title:</span> {scrapeResults.parsed.title || 'No title found'}
+                          </div>
+                          <div>
+                            <span className="font-semibold">Content Preview:</span>
+                            <div className="mt-1 p-2 bg-gray-200 dark:bg-gray-700 rounded text-sm max-h-40 overflow-auto">
+                              {scrapeResults.parsed.bodyText}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      <div>
+                        <span className="font-semibold">Full HTML:</span>
+                        <details>
+                          <summary className="cursor-pointer text-blue-500 hover:text-blue-700">
+                            Click to expand
+                          </summary>
+                          <pre className="mt-1 p-2 bg-gray-200 dark:bg-gray-700 rounded text-xs max-h-40 overflow-auto">
+                            {scrapeResults.content.substring(0, 2000)}
+                            {scrapeResults.content.length > 2000 ? '...(truncated)' : ''}
+                          </pre>
+                        </details>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </TabsContent>
             </Tabs>

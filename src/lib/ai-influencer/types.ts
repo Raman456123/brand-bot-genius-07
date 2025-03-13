@@ -1,4 +1,3 @@
-
 export interface ActivityResult {
   success: boolean;
   data: any | null;
@@ -73,4 +72,19 @@ export interface ImageGenerationResult {
   seed: number;
   generationId: string;
   prompt: string;
+}
+
+export interface WebScrapingOptions {
+  parseHtml?: boolean;
+  timeout?: number;
+}
+
+export interface WebScrapingResult {
+  statusCode: number;
+  content: string;
+  parsed?: {
+    title?: string | null;
+    bodyText?: string;
+  };
+  url: string;
 }

@@ -1,7 +1,7 @@
-
 import { Activity, ActivityResult, ApiKeyManager, Integration, AIState } from "./types";
 import { ChatActivity } from "./activities/ChatActivity";
 import { ImageGenerationActivity } from "./activities/ImageGenerationActivity";
+import { WebScrapingActivity } from "./activities/WebScrapingActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -73,8 +73,15 @@ export class AIInfluencerBrain {
       maxGenerationsPerDay: 5 // Limit for testing
     });
     
+    // Register the web scraping activity
+    const webScrapingActivity = new WebScrapingActivity({
+      parseHtml: true,
+      timeout: 10000
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
+    this.activities.push(webScrapingActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
