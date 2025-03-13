@@ -145,3 +145,15 @@ export interface GitHubCommit {
     };
   };
 }
+
+export interface BuildOrUpdateActivityOptions {
+  systemPrompt?: string;
+  maxTokens?: number;
+  recentActivitiesLimit?: number;
+}
+
+export interface BuildOrUpdateActivityResult {
+  filename: string;
+  codeSnippet: string;
+  message: string;
+}

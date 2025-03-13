@@ -5,6 +5,7 @@ import { WebScrapingActivity } from "./activities/WebScrapingActivity";
 import { XAPIActivity } from "./activities/XAPIActivity";
 import { AnalyzeDailyActivity } from "./activities/AnalyzeDailyActivity";
 import { AnalyzeGitHubCommitsActivity } from "./activities/AnalyzeGitHubCommitsActivity";
+import { BuildOrUpdateActivity } from "./activities/BuildOrUpdateActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -106,12 +107,20 @@ export class AIInfluencerBrain {
       maxTokens: 500
     });
     
+    // Register the build or update activity
+    const buildOrUpdateActivity = new BuildOrUpdateActivity({
+      systemPrompt: "You are an AI coder that converts user suggestions into valid code.",
+      maxTokens: 1200,
+      recentActivitiesLimit: 20
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
     this.activities.push(xApiActivity);
     this.activities.push(analyzeDailyActivity);
     this.activities.push(analyzeGitHubCommitsActivity);
+    this.activities.push(buildOrUpdateActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
