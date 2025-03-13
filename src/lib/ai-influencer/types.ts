@@ -1,3 +1,4 @@
+
 export interface ActivityResult {
   success: boolean;
   data: any | null;
@@ -116,4 +117,31 @@ export interface AnalyzeDailyResult {
   reflection: string;
   model: string;
   finishReason: string;
+}
+
+export interface GitHubCommitAnalysisOptions {
+  githubOwner: string;
+  githubRepo: string;
+  githubBranch?: string;
+  lookbackHours?: number;
+  systemPrompt?: string;
+  maxTokens?: number;
+}
+
+export interface GitHubCommitAnalysisResult {
+  analysis: string;
+  newCommitCount: number;
+  commitsAnalyzed: string[];
+  model?: string;
+  finishReason?: string;
+}
+
+export interface GitHubCommit {
+  sha: string;
+  commit: {
+    message: string;
+    author: {
+      date: string;
+    };
+  };
 }

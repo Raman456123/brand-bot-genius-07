@@ -4,6 +4,7 @@ import { ImageGenerationActivity } from "./activities/ImageGenerationActivity";
 import { WebScrapingActivity } from "./activities/WebScrapingActivity";
 import { XAPIActivity } from "./activities/XAPIActivity";
 import { AnalyzeDailyActivity } from "./activities/AnalyzeDailyActivity";
+import { AnalyzeGitHubCommitsActivity } from "./activities/AnalyzeGitHubCommitsActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -95,11 +96,22 @@ export class AIInfluencerBrain {
       activityLimit: 15
     });
     
+    // Register the GitHub commits analysis activity
+    const analyzeGitHubCommitsActivity = new AnalyzeGitHubCommitsActivity({
+      githubOwner: "yoheinakajima",
+      githubRepo: "pippin",
+      githubBranch: "main",
+      lookbackHours: 144,
+      systemPrompt: "You are a code review assistant. Summarize and analyze the following commits in detail.",
+      maxTokens: 500
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
     this.activities.push(xApiActivity);
     this.activities.push(analyzeDailyActivity);
+    this.activities.push(analyzeGitHubCommitsActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
