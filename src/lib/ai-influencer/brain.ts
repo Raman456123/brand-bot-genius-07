@@ -56,7 +56,51 @@ export class AIInfluencerBrain {
   private state: AIState = {
     mood: "neutral",
     energy: 1.0,
-    lastActivity: "none"
+    lastActivity: "none",
+    activityConstraints: {
+      activities_config: {
+        AnalyzeDailyActivity: { enabled: true },
+        AnalyzeNewCommitsActivity: { enabled: false },
+        BuildOrUpdateActivity: { enabled: false },
+        DailyThoughtActivity: { enabled: true },
+        DrawActivity: { enabled: true },
+        EvaluateActivity: { enabled: true },
+        FetchNewsActivity: { enabled: true },
+        NapActivity: { enabled: true },
+        PostTweetActivity: { enabled: false },
+        PostRecentMemoriesTweetActivity: { enabled: false },
+        SuggestNewActivities: { enabled: true },
+        TestActivity: { enabled: true }
+      },
+      activity_requirements: {
+        PostTweetActivity: {
+          required_skills: ["twitter_posting"],
+          min_memory_space: 100
+        },
+        FetchNewsActivity: {
+          required_skills: ["web_scraping"],
+          min_memory_space: 500
+        },
+        DrawActivity: {
+          required_skills: ["image_generation"],
+          min_memory_space: 200
+        },
+        AnalyzeDailyActivity: {
+          required_skills: ["openai_chat"],
+          min_memory_space: 100
+        },
+        SuggestNewActivities: {
+          required_skills: ["openai_chat"],
+          min_memory_space: 200
+        },
+        BuildOrUpdateActivity: {
+          required_skills: ["openai_chat"],
+          min_memory_space: 300
+        }
+      }
+    },
+    availableSkills: ["openai_chat", "image_generation", "web_scraping"],
+    availableMemorySpace: 1000
   };
   private storageKey = "ai_influencer_state";
   private activityCooldowns: Map<string, number> = new Map();
@@ -325,9 +369,59 @@ export class AIInfluencerBrain {
   }
 
   /**
+   * Load activity constraints from a configuration file or update from storage
+   */
+  public loadActivityConstraints(constraints: any): void {
+    if (!constraints) {
+      console.log("No constraints provided, using defaults");
+      return;
+    }
+
+    // Update state with provided constraints
+    this.state.activityConstraints = constraints;
+    
+    // Update available activities based on constraints
+    this.filterAvailableActivities();
+    
+    console.log("Activity constraints loaded");
+  }
+  
+  /**
+   * Filter available activities based on constraints
+   */
+  private filterAvailableActivities(): void {
+    if (!this.state.activityConstraints?.activities_config) {
+      // If no constraints, all activities are available
+      this.availableActivities = [...this.activities];
+      return;
+    }
+    
+    const config = this.state.activityConstraints.activities_config;
+    
+    // Filter activities based on whether they're enabled in the config
+    this.availableActivities = this.activities.filter(activity => {
+      // Convert activity.name to match config format (e.g., test → TestActivity)
+      const configName = activity.name.charAt(0).toUpperCase() + 
+                        activity.name.slice(1) + 
+                        (activity.name.includes('Activity') ? '' : 'Activity');
+      
+      // If activity is not in config, assume it's enabled
+      if (!config[configName]) {
+        return true;
+      }
+      
+      // Otherwise, check if it's explicitly enabled
+      return config[configName].enabled !== false;
+    });
+    
+    console.log(`Filtered activities: ${this.availableActivities.length} of ${this.activities.length} available`);
+  }
+
+  /**
    * Execute a specific activity by name with optional parameters
    */
   public async executeActivity(activityName: string, params?: any): Promise<ActivityResult> {
+    // Select an activity based on the current state
     const activity = this.activities.find(a => a.name === activityName);
     
     if (!activity) {

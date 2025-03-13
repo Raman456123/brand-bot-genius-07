@@ -23,6 +23,38 @@ export class TestActivity implements Activity {
       return false;
     }
     
+    // Check if this activity is enabled in constraints
+    const activityConstraints = state.activityConstraints || {};
+    const activitiesConfig = activityConstraints.activities_config || {};
+    
+    if (activitiesConfig.TestActivity && activitiesConfig.TestActivity.enabled === false) {
+      console.log("Test activity is disabled in constraints");
+      return false;
+    }
+    
+    // Check if we meet memory requirements (if defined)
+    const activityRequirements = activityConstraints.activity_requirements || {};
+    const testRequirements = activityRequirements.TestActivity || {};
+    
+    if (testRequirements.min_memory_space && 
+        state.availableMemorySpace < testRequirements.min_memory_space) {
+      console.log(`Insufficient memory space for Test activity. 
+        Required: ${testRequirements.min_memory_space}, 
+        Available: ${state.availableMemorySpace}`);
+      return false;
+    }
+    
+    // Check if we have all required skills
+    const requiredSkills = testRequirements.required_skills || [];
+    const availableSkills = state.availableSkills || [];
+    
+    for (const skill of requiredSkills) {
+      if (!availableSkills.includes(skill)) {
+        console.log(`Missing required skill for Test activity: ${skill}`);
+        return false;
+      }
+    }
+    
     return true;
   }
   
