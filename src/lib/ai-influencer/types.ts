@@ -167,3 +167,17 @@ export interface DailyThoughtResult {
   model?: string;
   finishReason?: string;
 }
+
+export interface DrawActivityOptions {
+  defaultSize?: string;
+  defaultFormat?: "png" | "jpg";
+  maxGenerationsPerDay?: number;
+}
+
+export interface DrawActivityResult {
+  generationId: string;
+  prompt: string;
+  imageUrl: string;
+  width: number;
+  height: number;
+}

@@ -7,6 +7,7 @@ import { AnalyzeDailyActivity } from "./activities/AnalyzeDailyActivity";
 import { AnalyzeGitHubCommitsActivity } from "./activities/AnalyzeGitHubCommitsActivity";
 import { BuildOrUpdateActivity } from "./activities/BuildOrUpdateActivity";
 import { DailyThoughtActivity } from "./activities/DailyThoughtActivity";
+import { DrawActivity } from "./activities/DrawActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -121,6 +122,13 @@ export class AIInfluencerBrain {
       maxTokens: 100
     });
     
+    // Register the draw activity
+    const drawActivity = new DrawActivity({
+      defaultSize: "1024x1024",
+      defaultFormat: "png",
+      maxGenerationsPerDay: 5
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -129,6 +137,7 @@ export class AIInfluencerBrain {
     this.activities.push(analyzeGitHubCommitsActivity);
     this.activities.push(buildOrUpdateActivity);
     this.activities.push(dailyThoughtActivity);
+    this.activities.push(drawActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
@@ -346,37 +355,5 @@ export class AIInfluencerBrain {
     if (!canRun) {
       return {
         success: false,
-        error: `Activity ${activity.name} cannot run in current state`,
-        data: null
-      };
-    }
-    
-    // Execute activity
-    try {
-      // Consume energy
-      this.state.energy = Math.max(0, this.state.energy - activity.energyCost);
-      
-      // Execute activity
-      const result = await activity.execute(apiKeys, this.state, params);
-      
-      // Set cooldown
-      this.activityCooldowns.set(activity.name, Date.now());
-      
-      // Update state
-      if (result.success) {
-        this.state.lastActivity = activity.name;
-        this.state.lastActivityTimestamp = new Date().toISOString();
-        this.saveState();
-      }
-      
-      return result;
-    } catch (error) {
-      console.error(`Error executing activity ${activity.name}:`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        data: null
-      };
-    }
-  }
-}
+        error: `Activity ${activityName} cannot
+
