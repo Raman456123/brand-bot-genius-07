@@ -1,4 +1,3 @@
-
 export interface ActivityResult {
   success: boolean;
   data: any | null;
@@ -192,4 +191,21 @@ export interface EvaluateActivityResult {
   evaluation: string;
   model?: string;
   finishReason?: string;
+}
+
+export interface FetchNewsOptions {
+  topics?: string[];
+  maxArticles?: number;
+}
+
+export interface NewsArticle {
+  title: string;
+  topic: string;
+  summary: string;
+  url: string;
+}
+
+export interface FetchNewsResult {
+  articles: NewsArticle[];
+  count: number;
 }

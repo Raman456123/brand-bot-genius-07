@@ -9,6 +9,7 @@ import { BuildOrUpdateActivity } from "./activities/BuildOrUpdateActivity";
 import { DailyThoughtActivity } from "./activities/DailyThoughtActivity";
 import { DrawActivity } from "./activities/DrawActivity";
 import { EvaluateActivity } from "./activities/EvaluateActivity";
+import { FetchNewsActivity } from "./activities/FetchNewsActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -136,6 +137,12 @@ export class AIInfluencerBrain {
       maxTokens: 250
     });
     
+    // Register the fetch news activity
+    const fetchNewsActivity = new FetchNewsActivity({
+      topics: ["technology", "science", "art", "business", "health"],
+      maxArticles: 5
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -146,6 +153,7 @@ export class AIInfluencerBrain {
     this.activities.push(dailyThoughtActivity);
     this.activities.push(drawActivity);
     this.activities.push(evaluateActivity);
+    this.activities.push(fetchNewsActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
