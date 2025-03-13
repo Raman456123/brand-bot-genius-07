@@ -22,6 +22,15 @@ export interface AIState {
   lastActivityTimestamp?: string;
   activeGoals?: string[];
   personality?: Record<string, any>;
+  activityConstraints?: {
+    activities_config?: Record<string, { enabled: boolean }>;
+    activity_requirements?: Record<string, {
+      required_skills?: string[];
+      min_memory_space?: number;
+    }>;
+  };
+  availableSkills?: string[];
+  availableMemorySpace?: number;
 }
 
 export interface ChatMessage {
