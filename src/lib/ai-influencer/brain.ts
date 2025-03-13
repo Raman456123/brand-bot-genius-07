@@ -1,4 +1,5 @@
-import { Activity, ActivityResult, ApiKeyManager, Integration, AIState } from "./types";
+
+import { Activity, ActivityResult, ApiKeyManager, Integration, AIState, SkillsConfig } from "./types";
 import { ChatActivity } from "./activities/ChatActivity";
 import { ImageGenerationActivity } from "./activities/ImageGenerationActivity";
 import { WebScrapingActivity } from "./activities/WebScrapingActivity";
@@ -256,38 +257,6 @@ export class AIInfluencerBrain {
   }
 
   /**
-   * Load state from local storage
-   */
-  private loadState(): void {
-    try {
-      const storedState = localStorage.getItem(this.storageKey);
-      if (storedState) {
-        this.state = JSON.parse(storedState);
-      }
-    } catch (error) {
-      console.error("Error loading state from local storage:", error);
-    }
-  }
-
-  /**
-   * Save state to local storage
-   */
-  private saveState(): void {
-    try {
-      localStorage.setItem(this.storageKey, JSON.stringify(this.state));
-    } catch (error) {
-      console.error("Error saving state to local storage:", error);
-    }
-  }
-
-  /**
-   * Get the current state of the AI influencer
-   */
-  public getState(): AIState {
-    return this.state;
-  }
-
-  /**
    * Get available activities
    */
   public getAvailableActivities(): Activity[] {
@@ -320,6 +289,94 @@ export class AIInfluencerBrain {
    */
   public async getApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>> {
     return this.apiKeyManager.getApiKeyStatuses();
+  }
+
+  /**
+   * Load skills configuration for the AI influencer
+   */
+  public loadSkillsConfig(skillsConfig: SkillsConfig): void {
+    if (!skillsConfig) {
+      console.log("No skills configuration provided, using defaults");
+      return;
+    }
+
+    // Update state with provided skills configuration
+    this.state.skillsConfig = skillsConfig;
+    
+    // Update available skills based on the configuration
+    this.updateAvailableSkills();
+    
+    // Set API keys from the skills configuration
+    this.setApiKeysFromSkillsConfig(skillsConfig);
+    
+    console.log("Skills configuration loaded");
+  }
+  
+  /**
+   * Update available skills based on the configuration
+   */
+  private updateAvailableSkills(): void {
+    if (!this.state.skillsConfig) {
+      return;
+    }
+    
+    const availableSkills: string[] = [];
+    
+    // Check each skill and add it to available skills if enabled
+    for (const [skillName, skillConfig] of Object.entries(this.state.skillsConfig)) {
+      // Skip the default_llm_skill key since it's not a skill config
+      if (skillName === 'default_llm_skill') continue;
+      
+      // Check if the value is an object with enabled property
+      if (typeof skillConfig === 'object' && skillConfig.enabled) {
+        availableSkills.push(skillName);
+      }
+    }
+    
+    // Update state with available skills
+    this.state.availableSkills = availableSkills;
+    console.log(`Available skills updated: ${availableSkills.join(', ')}`);
+    
+    // Filter available activities based on the updated skills
+    this.filterAvailableActivities();
+  }
+  
+  /**
+   * Set API keys from the skills configuration
+   */
+  private setApiKeysFromSkillsConfig(skillsConfig: SkillsConfig): void {
+    for (const [skillName, skillConfig] of Object.entries(skillsConfig)) {
+      // Skip the default_llm_skill key since it's not a skill config
+      if (skillName === 'default_llm_skill') continue;
+      
+      // Check if the value is an object with api_key_mapping
+      if (typeof skillConfig === 'object' && skillConfig.api_key_mapping) {
+        for (const [keyName, keyValue] of Object.entries(skillConfig.api_key_mapping)) {
+          // Set API key for activities that might use this skill
+          this.setApiKeyForSkill(skillName, keyName, keyValue);
+        }
+      }
+    }
+  }
+  
+  /**
+   * Set API key for activities that require a specific skill
+   */
+  private setApiKeyForSkill(skillName: string, keyName: string, keyValue: string): void {
+    // Map skill names to activities that might use them
+    const skillToActivityMap: Record<string, string[]> = {
+      'image_generation': ['generate_image', 'draw'],
+      'openai_chat': ['chat', 'analyze_daily', 'evaluate', 'suggest_new_activities', 'build_or_update_activity', 'daily_thought'],
+      'web_scraping': ['web_scrape', 'fetch_news'],
+      'twitter_posting': ['post_tweet', 'post_recent_memories_tweet']
+    };
+    
+    // Set API key for all relevant activities
+    const relevantActivities = skillToActivityMap[skillName] || [];
+    for (const activityName of relevantActivities) {
+      this.apiKeyManager.setApiKey(activityName, keyName, keyValue);
+      console.log(`Set API key ${keyName} for activity ${activityName}`);
+    }
   }
 
   /**
@@ -387,7 +444,7 @@ export class AIInfluencerBrain {
   }
   
   /**
-   * Filter available activities based on constraints
+   * Filter available activities based on constraints and available skills
    */
   private filterAvailableActivities(): void {
     if (!this.state.activityConstraints?.activities_config) {
@@ -397,8 +454,11 @@ export class AIInfluencerBrain {
     }
     
     const config = this.state.activityConstraints.activities_config;
+    const requirements = this.state.activityConstraints.activity_requirements || {};
+    const availableSkills = this.state.availableSkills || [];
+    const availableMemory = this.state.availableMemorySpace || 0;
     
-    // Filter activities based on whether they're enabled in the config
+    // Filter activities based on constraints
     this.availableActivities = this.activities.filter(activity => {
       // Convert activity.name to match config format (e.g., test → TestActivity)
       const configName = activity.name.charAt(0).toUpperCase() + 
@@ -406,12 +466,29 @@ export class AIInfluencerBrain {
                         (activity.name.includes('Activity') ? '' : 'Activity');
       
       // If activity is not in config, assume it's enabled
-      if (!config[configName]) {
-        return true;
+      if (config[configName] && !config[configName].enabled) {
+        return false;
       }
       
-      // Otherwise, check if it's explicitly enabled
-      return config[configName].enabled !== false;
+      // Check if activity has requirements
+      const activityRequirements = requirements[configName];
+      if (activityRequirements) {
+        // Check required skills
+        const requiredSkills = activityRequirements.required_skills || [];
+        for (const skill of requiredSkills) {
+          if (!availableSkills.includes(skill)) {
+            return false;
+          }
+        }
+        
+        // Check memory requirements
+        const minMemory = activityRequirements.min_memory_space || 0;
+        if (minMemory > availableMemory) {
+          return false;
+        }
+      }
+      
+      return true;
     });
     
     console.log(`Filtered activities: ${this.availableActivities.length} of ${this.activities.length} available`);

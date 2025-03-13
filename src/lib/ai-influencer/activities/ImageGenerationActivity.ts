@@ -1,5 +1,4 @@
-
-import { Activity, ActivityResult, ImageGenerationOptions } from "../types";
+import { Activity, ActivityResult, ImageGenerationOptions, SkillConfig } from "../types";
 
 /**
  * Image Generation activity using AI image APIs
@@ -60,9 +59,20 @@ export class ImageGenerationActivity implements Activity {
       return false;
     }
     
+    // Check if the required skill is available and enabled
+    const skillConfig = state.skillsConfig?.image_generation as SkillConfig | undefined;
+    if (skillConfig && !skillConfig.enabled) {
+      console.log("Image generation skill is disabled");
+      return false;
+    }
+    
     // Check if we've reached the daily limit
     this.checkAndResetDailyCount();
-    return this.generationsCount < this.maxGenerationsPerDay;
+    
+    // If skill config is available, use its max_generations_per_day
+    const maxGenerations = skillConfig?.max_generations_per_day || this.maxGenerationsPerDay;
+    
+    return this.generationsCount < maxGenerations;
   }
   
   /**
@@ -85,7 +95,11 @@ export class ImageGenerationActivity implements Activity {
       // Ensure we have the latest count
       this.checkAndResetDailyCount();
       
-      if (this.generationsCount >= this.maxGenerationsPerDay) {
+      // Check skill config for max generations
+      const skillConfig = state.skillsConfig?.image_generation as SkillConfig | undefined;
+      const maxGenerations = skillConfig?.max_generations_per_day || this.maxGenerationsPerDay;
+      
+      if (this.generationsCount >= maxGenerations) {
         return {
           success: false,
           error: "Daily generation limit reached",
@@ -93,11 +107,33 @@ export class ImageGenerationActivity implements Activity {
         };
       }
       
+      // Check for supported formats in skill config
+      if (skillConfig?.supported_formats && params.format) {
+        if (!skillConfig.supported_formats.includes(params.format)) {
+          return {
+            success: false,
+            error: `Format ${params.format} is not supported. Supported formats: ${skillConfig.supported_formats.join(', ')}`,
+            data: null
+          };
+        }
+      }
+      
       const size = params.size || this.size;
       const format = params.format || this.format;
       
+      // Get API key from skill config mapping if available
+      const apiKey = apiKeys["OPENAI"] || skillConfig?.api_key_mapping?.["OPENAI"] || null;
+      
+      if (!apiKey) {
+        return {
+          success: false,
+          error: "No API key available for OpenAI",
+          data: null
+        };
+      }
+      
       // Call OpenAI API for image generation
-      const response = await this.callOpenAIImageAPI(apiKeys["OPENAI"], params.prompt, size);
+      const response = await this.callOpenAIImageAPI(apiKey, params.prompt, size);
       
       if (!response.success) {
         return {

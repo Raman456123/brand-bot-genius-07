@@ -1,5 +1,5 @@
 
-import { Activity, ActivityResult, ChatActivityOptions, ChatMessage } from "../types";
+import { Activity, ActivityResult, ChatActivityOptions, ChatMessage, SkillConfig } from "../types";
 
 /**
  * Chat activity that uses LLM APIs to generate responses
@@ -32,8 +32,16 @@ export class ChatActivity implements Activity {
       return false;
     }
     
-    // Check if API key is available
-    return !!apiKeys["OPENAI"];
+    // Check if the required skill is available and enabled
+    const skillConfig = state.skillsConfig?.openai_chat as SkillConfig | undefined;
+    if (skillConfig && !skillConfig.enabled) {
+      console.log("OpenAI chat skill is disabled");
+      return false;
+    }
+    
+    // Check if API key is available - either directly or from skill config
+    const apiKey = apiKeys["OPENAI"] || skillConfig?.api_key_mapping?.["OPENAI"] || null;
+    return !!apiKey;
   }
   
   /**
@@ -64,8 +72,29 @@ export class ChatActivity implements Activity {
       // Add user prompt
       messages.push({ role: "user", content: params.prompt });
       
+      // Get API key from skill config mapping if available
+      const skillConfig = state.skillsConfig?.openai_chat as SkillConfig | undefined;
+      const apiKey = apiKeys["OPENAI"] || skillConfig?.api_key_mapping?.["OPENAI"] || null;
+      
+      if (!apiKey) {
+        return {
+          success: false,
+          error: "No API key available for OpenAI",
+          data: null
+        };
+      }
+      
+      // Get model name from skill config if available
+      let modelToUse = this.modelName;
+      if (skillConfig?.model_name) {
+        modelToUse = skillConfig.model_name;
+      } else if (state.skillsConfig?.default_llm_skill && state.skillsConfig.lite_llm?.model_name) {
+        // Use default LLM model if available
+        modelToUse = state.skillsConfig.lite_llm.model_name;
+      }
+      
       // Call OpenAI API
-      const response = await this.callOpenAI(apiKeys["OPENAI"], messages);
+      const response = await this.callOpenAI(apiKey, messages, modelToUse);
       
       if (!response.success) {
         return {
@@ -99,7 +128,8 @@ export class ChatActivity implements Activity {
    */
   private async callOpenAI(
     apiKey: string, 
-    messages: ChatMessage[]
+    messages: ChatMessage[],
+    modelName?: string
   ): Promise<{ 
     success: boolean; 
     data?: any; 
@@ -113,7 +143,7 @@ export class ChatActivity implements Activity {
           "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: this.modelName,
+          model: modelName || this.modelName,
           messages,
           max_tokens: this.maxTokens,
           temperature: 0.7

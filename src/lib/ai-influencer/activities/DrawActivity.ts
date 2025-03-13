@@ -1,5 +1,5 @@
 
-import { Activity, ActivityResult, DrawActivityOptions, DrawActivityResult } from "../types";
+import { Activity, ActivityResult, DrawActivityOptions, DrawActivityResult, SkillConfig } from "../types";
 import { ImageGenerationActivity } from "./ImageGenerationActivity";
 
 /**
@@ -35,6 +35,13 @@ export class DrawActivity implements Activity {
       return false;
     }
     
+    // Check if the required skill is available and enabled
+    const skillConfig = state.skillsConfig?.image_generation as SkillConfig | undefined;
+    if (skillConfig && !skillConfig.enabled) {
+      console.log("Image generation skill is disabled");
+      return false;
+    }
+    
     // Check if the ImageGenerationActivity can run (requires OpenAI API key)
     return await this.imageGenerationActivity.canRun(apiKeys, state);
   }
@@ -46,9 +53,19 @@ export class DrawActivity implements Activity {
       // Generate a prompt based on current state
       const prompt = this.generatePrompt(state);
       
+      // Get format from skill config if available
+      const skillConfig = state.skillsConfig?.image_generation as SkillConfig | undefined;
+      let format = this.defaultFormat;
+      
+      if (skillConfig?.supported_formats && skillConfig.supported_formats.length > 0) {
+        // Use the first supported format from the config
+        format = skillConfig.supported_formats[0] as "png" | "jpg";
+      }
+      
       // Generate the image using ImageGenerationActivity
       const response = await this.imageGenerationActivity.execute(apiKeys, state, { 
-        prompt: prompt
+        prompt: prompt,
+        format: format
       });
       
       if (!response.success) {
@@ -75,7 +92,7 @@ export class DrawActivity implements Activity {
         metadata: {
           timestamp: new Date().toISOString(),
           size: this.defaultSize,
-          format: this.defaultFormat
+          format: format
         }
       };
       

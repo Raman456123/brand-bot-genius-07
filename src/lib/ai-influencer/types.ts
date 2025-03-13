@@ -1,3 +1,4 @@
+
 export interface ActivityResult {
   success: boolean;
   data: any | null;
@@ -31,6 +32,26 @@ export interface AIState {
   };
   availableSkills?: string[];
   availableMemorySpace?: number;
+  skillsConfig?: SkillsConfig;
+}
+
+export interface SkillsConfig {
+  image_generation?: SkillConfig;
+  openai_chat?: SkillConfig;
+  web_scraping?: SkillConfig;
+  twitter_posting?: SkillConfig;
+  default_llm_skill?: string;
+  lite_llm?: SkillConfig;
+  [key: string]: SkillConfig | string | undefined;
+}
+
+export interface SkillConfig {
+  enabled: boolean;
+  max_generations_per_day?: number;
+  supported_formats?: string[];
+  required_api_keys?: string[];
+  api_key_mapping?: Record<string, string>;
+  model_name?: string;
 }
 
 export interface ChatMessage {
