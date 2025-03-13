@@ -1,17 +1,16 @@
+
 import { useState, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AIInfluencerController } from "@/lib/ai-influencer/controller";
-import { Play, Pause, RotateCcw, Terminal, Settings, Activity, Info, User } from "lucide-react";
+import { Terminal, Settings, Activity, Info, User } from "lucide-react";
 import { ActivityLogs } from "@/components/ai-influencer/ActivityLogs";
 import { ApiKeyManager } from "@/components/ai-influencer/ApiKeyManager";
-import { AIInfluencerProfile, Personality } from "@/lib/ai-influencer/types";
-import { Slider } from "@/components/ui/slider";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
+import { Personality, AIInfluencerProfile, ChatMessage } from "@/lib/ai-influencer/types";
+import { InfluencerControls } from "@/components/ai-influencer/InfluencerControls";
+import { DashboardPanel } from "@/components/ai-influencer/DashboardPanel";
+import { PersonalityForm } from "@/components/ai-influencer/PersonalityForm";
+import { AboutPippin } from "@/components/ai-influencer/AboutPippin";
 
 interface ActivityLog {
   timestamp: string;
@@ -286,39 +285,12 @@ export default function Influencer() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Pippin AI Influencer</h1>
           
-          <div className="flex gap-2">
-            <Button
-              onClick={handleActivate}
-              variant={isRunning ? "destructive" : "default"}
-              className="gap-2"
-            >
-              {isRunning ? (
-                <>
-                  <Pause className="h-4 w-4" /> Deactivate
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" /> Activate
-                </>
-              )}
-            </Button>
-            
-            <Button 
-              onClick={handleRunSingleActivity} 
-              variant="outline"
-              disabled={isRunning}
-            >
-              Run Once
-            </Button>
-            
-            <Button 
-              onClick={handleClearLogs} 
-              variant="ghost"
-              size="icon"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </div>
+          <InfluencerControls
+            isRunning={isRunning}
+            onActivate={handleActivate}
+            onRunSingleActivity={handleRunSingleActivity}
+            onClearLogs={handleClearLogs}
+          />
         </div>
         
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -337,70 +309,14 @@ export default function Influencer() {
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="dashboard" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="md:col-span-2">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                    <Terminal className="h-5 w-5" />
-                    System Logs
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ActivityLogs logs={logs} />
-                  <div ref={logsEndRef} />
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold">AI State</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Status</p>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${isRunning ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                      <p className="font-medium">{isRunning ? 'Active' : 'Inactive'}</p>
-                    </div>
-                  </div>
-                  
-                  {currentActivity && (
-                    <div>
-                      <p className="text-sm text-gray-500 mb-1">Current Activity</p>
-                      <p className="font-medium">{currentActivity}</p>
-                    </div>
-                  )}
-                  
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Energy Level</p>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                      <div 
-                        className="bg-blue-600 h-2.5 rounded-full" 
-                        style={{ width: `${brainState.energy * 100}%` }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-right mt-1">{Math.round(brainState.energy * 100)}%</p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Mood</p>
-                    <p className="font-medium capitalize">{brainState.mood}</p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Last Activity</p>
-                    <p className="font-medium">{brainState.lastActivity}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
-            <Alert>
-              <AlertDescription>
-                The AI Influencer's activities simulate actions based on the Pippin framework. Configure API keys in the Configuration tab.
-              </AlertDescription>
-            </Alert>
+          <TabsContent value="dashboard">
+            <DashboardPanel
+              logs={logs}
+              isRunning={isRunning}
+              currentActivity={currentActivity}
+              brainState={brainState}
+              logsEndRef={logsEndRef}
+            />
           </TabsContent>
           
           <TabsContent value="config">
@@ -416,127 +332,26 @@ export default function Influencer() {
             </Alert>
           </TabsContent>
           
-          <TabsContent value="personality" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Personality Configuration</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Personality Traits</h3>
-                  
-                  <div className="space-y-6">
-                    {Object.entries(personality).map(([trait, value]) => (
-                      <div key={trait} className="space-y-2">
-                        <div className="flex justify-between">
-                          <Label htmlFor={trait} className="capitalize">
-                            {trait.replace(/_/g, ' ')}
-                          </Label>
-                          <span className="text-sm">{(value * 10).toFixed(1)}/10</span>
-                        </div>
-                        <Slider
-                          id={trait}
-                          value={[value * 10]}
-                          min={0}
-                          max={10}
-                          step={0.1}
-                          onValueChange={(values) => {
-                            const newValue = values[0] / 10;
-                            setPersonality(prev => ({
-                              ...prev,
-                              [trait]: newValue
-                            }));
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Objectives</h3>
-                  <div className="space-y-2">
-                    <Label htmlFor="primary-objective">Primary Objective</Label>
-                    <Input
-                      id="primary-objective"
-                      value={primaryObjective}
-                      onChange={(e) => setPrimaryObjective(e.target.value)}
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Backstory</h3>
-                  <div className="space-y-2">
-                    <Label htmlFor="backstory-origin">Origin</Label>
-                    <Textarea
-                      id="backstory-origin"
-                      value={backstoryOrigin}
-                      onChange={(e) => setBackstoryOrigin(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="backstory-purpose">Purpose</Label>
-                    <Textarea
-                      id="backstory-purpose"
-                      value={backstoryPurpose}
-                      onChange={(e) => setBackstoryPurpose(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="core-values">Core Values (comma-separated)</Label>
-                    <Input
-                      id="core-values"
-                      value={coreValues}
-                      onChange={(e) => setCoreValues(e.target.value)}
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Preferences</h3>
-                  <div className="space-y-2">
-                    <Label htmlFor="favorite-topics">Favorite Topics (comma-separated)</Label>
-                    <Input
-                      id="favorite-topics"
-                      value={favTopics}
-                      onChange={(e) => setFavTopics(e.target.value)}
-                    />
-                  </div>
-                </div>
-                
-                <Button onClick={handleSaveProfile}>Save Personality Profile</Button>
-              </CardContent>
-            </Card>
+          <TabsContent value="personality">
+            <PersonalityForm
+              personality={personality}
+              setPersonality={setPersonality}
+              primaryObjective={primaryObjective}
+              setPrimaryObjective={setPrimaryObjective}
+              backstoryOrigin={backstoryOrigin}
+              setBackstoryOrigin={setBackstoryOrigin}
+              backstoryPurpose={backstoryPurpose}
+              setBackstoryPurpose={setBackstoryPurpose}
+              coreValues={coreValues}
+              setCoreValues={setCoreValues}
+              favTopics={favTopics}
+              setFavTopics={setFavTopics}
+              onSaveProfile={handleSaveProfile}
+            />
           </TabsContent>
           
           <TabsContent value="about">
-            <Card>
-              <CardHeader>
-                <CardTitle>About Pippin AI Framework</CardTitle>
-              </CardHeader>
-              <CardContent className="prose dark:prose-invert max-w-none">
-                <p>
-                  <strong>Pippin</strong> is a flexible, open-source framework to create a digital "being" that learns 
-                  about your goals, connects to various tools or APIs, dynamically creates and tests new "Activities" 
-                  in pursuit of your objectives, and manages a memory system to track past actions and outcomes.
-                </p>
-                
-                <h3>Key Features</h3>
-                <ul>
-                  <li><strong>Self-Improving:</strong> The AI can suggest and implement new activities</li>
-                  <li><strong>Multiple LLM Support:</strong> Use OpenAI, GPT4All, or custom providers</li>
-                  <li><strong>Memory System:</strong> Short and long-term memory of activities and results</li>
-                  <li><strong>API Integrations:</strong> Connect to external services and tools</li>
-                  <li><strong>Activity Framework:</strong> Pre-built activities with constraint management</li>
-                </ul>
-                
-                <p>
-                  This implementation is a web-based version inspired by the Pippin framework, adapted to run in a 
-                  browser environment using TypeScript and React.
-                </p>
-              </CardContent>
-            </Card>
+            <AboutPippin />
           </TabsContent>
         </Tabs>
       </div>
