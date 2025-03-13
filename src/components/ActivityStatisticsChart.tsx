@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import TimeRangeChart, { TimeSeriesData } from './TimeRangeChart';
+import TimeSeriesData, { TimeSeriesDataPoint } from './TimeSeriesData';
 import { TimeRange } from '@/lib/chart-utils';
 
 // Mock data for demonstration
-const generateMockData = (days: number): TimeSeriesData[] => {
-  const data: TimeSeriesData[] = [];
+const generateMockData = (days: number): TimeSeriesDataPoint[] => {
+  const data: TimeSeriesDataPoint[] = [];
   const now = new Date();
   
   for (let i = 0; i < days; i++) {
@@ -35,7 +35,7 @@ const generateMockData = (days: number): TimeSeriesData[] => {
 const mockData = generateMockData(30); // 30 days of data
 
 interface ActivityStatisticsChartProps {
-  data?: TimeSeriesData[];
+  data?: TimeSeriesDataPoint[];
   title?: string;
   className?: string;
 }
@@ -47,10 +47,6 @@ const ActivityStatisticsChart: React.FC<ActivityStatisticsChartProps> = ({
 }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
-  
-  // Calculate date range
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30); // Last 30 days
   
   return (
     <div className={`p-4 border rounded-lg bg-card ${className}`}>
@@ -81,11 +77,10 @@ const ActivityStatisticsChart: React.FC<ActivityStatisticsChartProps> = ({
         </div>
       </div>
       
-      <TimeRangeChart
+      <TimeSeriesData
         data={data}
         timeRange={timeRange}
         chartType={chartType}
-        startDate={startDate}
         title=""
         yAxisLabel="Activities"
         xAxisLabel="Time"
