@@ -6,6 +6,7 @@ import { XAPIActivity } from "./activities/XAPIActivity";
 import { AnalyzeDailyActivity } from "./activities/AnalyzeDailyActivity";
 import { AnalyzeGitHubCommitsActivity } from "./activities/AnalyzeGitHubCommitsActivity";
 import { BuildOrUpdateActivity } from "./activities/BuildOrUpdateActivity";
+import { DailyThoughtActivity } from "./activities/DailyThoughtActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -114,6 +115,12 @@ export class AIInfluencerBrain {
       recentActivitiesLimit: 20
     });
     
+    // Register the daily thought activity
+    const dailyThoughtActivity = new DailyThoughtActivity({
+      systemPrompt: "You are a thoughtful AI that generates brief, insightful daily reflections. Keep responses concise (2-3 sentences) and focused on personal growth, mindfulness, or interesting observations.",
+      maxTokens: 100
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -121,6 +128,7 @@ export class AIInfluencerBrain {
     this.activities.push(analyzeDailyActivity);
     this.activities.push(analyzeGitHubCommitsActivity);
     this.activities.push(buildOrUpdateActivity);
+    this.activities.push(dailyThoughtActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({

@@ -1,4 +1,3 @@
-
 export interface ActivityResult {
   success: boolean;
   data: any | null;
@@ -156,4 +155,15 @@ export interface BuildOrUpdateActivityResult {
   filename: string;
   codeSnippet: string;
   message: string;
+}
+
+export interface DailyThoughtOptions {
+  systemPrompt?: string;
+  maxTokens?: number;
+}
+
+export interface DailyThoughtResult {
+  thought: string;
+  model?: string;
+  finishReason?: string;
 }
