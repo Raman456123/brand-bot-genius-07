@@ -1,5 +1,5 @@
 
-import { AIState, Activity, ActivityResult, AIInfluencerProfile } from './types';
+import { AIState, Activity, ActivityResult, AIInfluencerProfile, ChatMessage } from './types';
 
 export interface AIBrainInterface {
   loadState(): Promise<void>;
@@ -20,4 +20,10 @@ export interface AIBrainInterface {
   // API key management
   setApiKey(activityName: string, keyName: string, keyValue: string): Promise<boolean>;
   getApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>>;
+  
+  // Personality integration methods
+  getPersonalityPrompt(): string;
+  getCommunicationStylePrompt(): string;
+  enhancePromptWithPersonality(basePrompt: string): string;
+  getSystemMessagesWithPersonality(baseSystemMessage: string): ChatMessage[];
 }

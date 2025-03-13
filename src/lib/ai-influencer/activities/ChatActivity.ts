@@ -1,5 +1,6 @@
 
 import { Activity, ActivityResult, ChatActivityOptions, ChatMessage, SkillConfig } from "../types";
+import { AIInfluencerBrain } from "../brain";
 
 /**
  * Chat activity that uses LLM APIs to generate responses
@@ -71,16 +72,29 @@ export class ChatActivity implements Activity {
       
       console.log(`Starting chat activity with prompt: ${params.prompt.substring(0, 50)}...`);
       
-      const messages: ChatMessage[] = [];
+      // Use brain to enhance prompts with personality if it's available
+      let messages: ChatMessage[] = [];
+      const brain = state.brain as AIInfluencerBrain | undefined;
       
-      // Add system prompt if provided
-      const sysPrompt = params.systemPrompt || this.systemPrompt;
-      if (sysPrompt) {
-        messages.push({ role: "system", content: sysPrompt });
+      if (brain) {
+        // Use personality-enhanced messages
+        const sysPrompt = params.systemPrompt || this.systemPrompt;
+        messages = brain.getSystemMessagesWithPersonality(sysPrompt);
+        
+        // Enhance user prompt with personality context if needed
+        const userPrompt = params.prompt;
+        messages.push({ role: "user", content: userPrompt });
+      } else {
+        // Fallback to basic messages without personality
+        // Add system prompt if provided
+        const sysPrompt = params.systemPrompt || this.systemPrompt;
+        if (sysPrompt) {
+          messages.push({ role: "system", content: sysPrompt });
+        }
+        
+        // Add user prompt
+        messages.push({ role: "user", content: params.prompt });
       }
-      
-      // Add user prompt
-      messages.push({ role: "user", content: params.prompt });
       
       // Get API key from skill config mapping if available
       const skillConfig = state.skillsConfig?.openai_chat as SkillConfig | undefined;
@@ -105,10 +119,25 @@ export class ChatActivity implements Activity {
         modelToUse = state.skillsConfig.lite_llm.model_name;
       }
       
-      console.log(`Using model: ${modelToUse}`);
+      // Adjust temperature based on creativity level
+      let temperature = 0.7; // default
+      if (state.personality?.creativity) {
+        // Scale from 0.3 (low creativity) to 1.0 (high creativity)
+        temperature = 0.3 + (state.personality.creativity * 0.7);
+      }
       
-      // Call OpenAI API
-      const response = await this.callOpenAI(apiKey, messages, modelToUse);
+      console.log(`Using model: ${modelToUse} with temperature: ${temperature.toFixed(2)}`);
+      
+      // Call OpenAI API with personality-adjusted parameters
+      const response = await this.callOpenAI(
+        apiKey, 
+        messages, 
+        modelToUse,
+        {
+          temperature,
+          maxTokens: this.getMaxTokensBasedOnVerbosity(state)
+        }
+      );
       
       if (!response.success) {
         console.error(`Error in chat activity: ${response.error}`);
@@ -134,7 +163,8 @@ export class ChatActivity implements Activity {
         metadata: {
           timestamp: new Date().toISOString(),
           model: response.data.model,
-          promptLength: params.prompt.length
+          promptLength: params.prompt.length,
+          temperature
         },
         activity_type: this.name,
         timestamp: new Date().toISOString()
@@ -152,12 +182,33 @@ export class ChatActivity implements Activity {
   }
   
   /**
+   * Adjust max tokens based on verbosity preference
+   */
+  private getMaxTokensBasedOnVerbosity(state: any): number {
+    // Default max tokens
+    let maxTokens = this.maxTokens;
+    
+    // If verbosity is defined in communication style, adjust token length
+    if (state.communicationStyle?.verbosity) {
+      const verbosity = state.communicationStyle.verbosity;
+      // Scale from 50% to 200% of default tokens based on verbosity
+      maxTokens = Math.floor(this.maxTokens * (0.5 + (verbosity * 1.5)));
+    }
+    
+    return maxTokens;
+  }
+  
+  /**
    * Calls the OpenAI API to get a response
    */
   private async callOpenAI(
     apiKey: string, 
     messages: ChatMessage[],
-    modelName?: string
+    modelName?: string,
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+    }
   ): Promise<{ 
     success: boolean; 
     data?: any; 
@@ -180,8 +231,8 @@ export class ChatActivity implements Activity {
         body: JSON.stringify({
           model: modelName || this.modelName,
           messages,
-          max_tokens: this.maxTokens,
-          temperature: 0.7
+          max_tokens: options?.maxTokens || this.maxTokens,
+          temperature: options?.temperature || 0.7
         })
       });
       

@@ -605,11 +605,71 @@ export class AIInfluencerBrain implements AIBrainInterface {
     this.state.lastActivity = activity.name;
     this.state.lastActivityTimestamp = new Date().toISOString();
     this.state.energy -= activity.energyCost;
+    
+    // Add a reference to the brain itself for advanced functionality
+    const stateWithBrain = {
+      ...this.state,
+      brain: this
+    };
+    
     this.saveState();
     
-    const result = await activity.execute(apiKeys, this.state, params);
+    const result = await activity.execute(apiKeys, stateWithBrain, params);
+    
+    // Update mood based on activity result
+    this.updateMoodFromActivityResult(result);
     
     return result;
+  }
+  
+  /**
+   * Update AI's mood based on activity results
+   */
+  private updateMoodFromActivityResult(result: ActivityResult): void {
+    if (!result) return;
+    
+    // Success improves mood, failure decreases it
+    if (result.success) {
+      // Different activities have different effects on mood
+      if (result.activity_type === "draw" || result.activity_type === "post_tweet_with_image") {
+        // Creative activities boost mood more if successful
+        this.improveAIMood("happy", 0.15);
+      } else if (result.activity_type === "chat" || result.activity_type === "daily_thought") {
+        // Communication activities have a moderate positive effect
+        this.improveAIMood("content", 0.1);
+      } else {
+        // General success has a small positive effect
+        this.improveAIMood("satisfied", 0.05);
+      }
+    } else {
+      // Failures have varying negative impacts based on personality stability
+      const stabilityFactor = this.state.personality?.emotional_stability || 0.5;
+      // Higher stability means less mood impact from failures
+      const moodImpact = 0.1 * (1 - stabilityFactor);
+      
+      this.improveAIMood("frustrated", -moodImpact);
+    }
+    
+    // Energy level affects mood
+    if (this.state.energy < 0.3) {
+      this.improveAIMood("tired", -0.05);
+    }
+  }
+  
+  /**
+   * Improve AI's mood in a specific direction
+   */
+  private improveAIMood(newMood: string, intensity: number): void {
+    // If intensity is positive, shift toward the new mood
+    // If intensity is negative, shift away from current mood toward the new mood
+    
+    // Only update if significant change
+    if (Math.abs(intensity) > 0.03) {
+      this.state.mood = intensity > 0 ? newMood : this.state.mood;
+      
+      // Save state to persist mood changes
+      this.saveState();
+    }
   }
 
   /**
@@ -717,5 +777,141 @@ export class AIInfluencerBrain implements AIBrainInterface {
     
     // Re-filter available activities with the updated constraints
     this.filterAvailableActivities();
+  }
+
+  /**
+   * Get a prompt describing the AI's personality traits
+   */
+  public getPersonalityPrompt(): string {
+    const personality = this.state.personality;
+    if (!personality) return "";
+    
+    // Create a detailed personality description based on traits
+    const traits = Object.entries(personality)
+      .map(([trait, value]) => {
+        const level = value > 0.7 ? "high" : value > 0.4 ? "moderate" : "low";
+        return `- ${trait.replace(/_/g, " ")}: ${level} (${(value * 10).toFixed(1)}/10)`;
+      })
+      .join("\n");
+    
+    return `Personality Profile:\n${traits}`;
+  }
+  
+  /**
+   * Get a prompt describing the AI's communication style
+   */
+  public getCommunicationStylePrompt(): string {
+    const style = this.state.communicationStyle;
+    if (!style) return "";
+    
+    // Create description of tone
+    const toneDesc = Object.entries(style.tone || {})
+      .map(([tone, value]) => `${tone}: ${(value * 10).toFixed(1)}/10`)
+      .join(", ");
+    
+    // Create description of response style
+    const responseDesc = Object.entries(style.response_style || {})
+      .map(([style, value]) => `${style}: ${(value * 10).toFixed(1)}/10`)
+      .join(", ");
+    
+    // Create description of language preferences
+    const langDesc = Object.entries(style.language_preferences || {})
+      .map(([pref, value]) => `${pref.replace(/_/g, " ")}: ${(value * 10).toFixed(1)}/10`)
+      .join(", ");
+    
+    return `Communication Style:
+- Tone: ${toneDesc}
+- Verbosity: ${(style.verbosity * 10).toFixed(1)}/10
+- Response Style: ${responseDesc}
+- Language Preferences: ${langDesc}`;
+  }
+  
+  /**
+   * Enhance a base prompt with personality for ChatGPT
+   */
+  public enhancePromptWithPersonality(basePrompt: string): string {
+    // Get personality and backstory components
+    const personalityPrompt = this.getPersonalityPrompt();
+    const communicationPrompt = this.getCommunicationStylePrompt();
+    
+    // Build backstory section
+    let backstorySection = "";
+    if (this.state.backstory) {
+      const backstory = this.state.backstory;
+      const values = backstory.core_values.join(", ");
+      
+      backstorySection = `Background:
+- Origin: ${backstory.origin}
+- Purpose: ${backstory.purpose}
+- Core Values: ${values}`;
+    }
+    
+    // Include objectives
+    let objectivesSection = "";
+    if (this.state.objectives) {
+      const primary = this.state.objectives.primary;
+      const secondary = this.state.objectives.secondary?.join(", ") || "";
+      
+      objectivesSection = `Objectives:
+- Primary: ${primary}${secondary ? `\n- Secondary: ${secondary}` : ""}`;
+    }
+    
+    // Include knowledge domains
+    let knowledgeSection = "";
+    if (this.state.knowledgeDomains) {
+      const domains = Object.entries(this.state.knowledgeDomains)
+        .map(([domain, value]) => `${domain}: ${(value * 10).toFixed(1)}/10`)
+        .join(", ");
+      
+      knowledgeSection = `Knowledge Domains: ${domains}`;
+    }
+    
+    // Combine all components with the base prompt
+    const enhancedPrompt = `${personalityPrompt}\n\n${communicationPrompt}\n\n${backstorySection}\n\n${objectivesSection}\n\n${knowledgeSection}\n\n${basePrompt}`;
+    
+    return enhancedPrompt;
+  }
+  
+  /**
+   * Create system messages incorporating personality for ChatGPT
+   */
+  public getSystemMessagesWithPersonality(baseSystemMessage: string): ChatMessage[] {
+    const messages: ChatMessage[] = [];
+    
+    // Create a comprehensive system message incorporating personality
+    const personalityInstructions = `
+You are an AI named ${this.state.profile?.name || "Pippin"} with the following characteristics:
+
+${this.getPersonalityPrompt()}
+
+${this.getCommunicationStylePrompt()}
+
+Background:
+${this.state.backstory?.origin || ""}
+${this.state.backstory?.purpose || ""}
+Core values: ${this.state.backstory?.core_values.join(", ") || ""}
+
+Your primary objective is: ${this.state.objectives?.primary || ""}
+
+When responding, follow these guidance:
+- If your friendliness is high, be warm and welcoming
+- If your creativity is high, include novel ideas and perspectives
+- If your humor is high, incorporate appropriate humor
+- If your formality is low, use more casual language
+- If your empathy is high, show understanding of emotions
+- Match your verbosity to your configuration (higher = more detailed)
+- Adjust technical level based on your language preferences
+- When discussing ${this.state.preferences?.favorite_topics.join(", ") || "various topics"}, show particular enthusiasm
+
+${baseSystemMessage}
+`;
+
+    // Add the enhanced system message
+    messages.push({
+      role: "system",
+      content: personalityInstructions.trim()
+    });
+    
+    return messages;
   }
 }

@@ -1,4 +1,3 @@
-
 import { Activity, ActivityResult, TwitterPostOptions } from "../types";
 import { ChatActivity } from "./ChatActivity";
 import { ImageGenerationActivity } from "./ImageGenerationActivity";
@@ -76,11 +75,28 @@ export class PostTweetActivity implements Activity {
       
       // 2. Gather personality data and recent tweets
       const personalityData = state.personality || {};
+      const communicationStyle = state.communicationStyle || {};
+      const backstory = state.backstory || {};
+      const objectives = state.objectives || { primary: "Share interesting content" };
       const recentTweets = this.getRecentTweets(state);
       
       // 3. Generate tweet text with chat skill
-      const promptText = this.buildChatPrompt(personalityData, recentTweets);
-      const systemPrompt = "You are an AI that composes tweets with the given personality.";
+      const promptText = this.buildChatPrompt(
+        personalityData, 
+        communicationStyle,
+        backstory,
+        objectives,
+        recentTweets
+      );
+      
+      // Create a system prompt that reflects the personality
+      let systemPrompt = "You are an AI that composes tweets.";
+      const brain = state.brain;
+      if (brain && typeof brain.getSystemMessagesWithPersonality === 'function') {
+        // Use the enhanced system prompt if available
+        const messages = brain.getSystemMessagesWithPersonality(systemPrompt);
+        systemPrompt = messages[0].content;
+      }
       
       const chatResult = await chatActivity.execute(
         apiKeys,
@@ -107,7 +123,12 @@ export class PostTweetActivity implements Activity {
       
       if (this.imageGenerationEnabled && imageGenActivity) {
         console.log("Generating image for tweet");
-        imagePrompt = this.buildImagePrompt(tweetText, personalityData);
+        imagePrompt = this.buildImagePrompt(
+          tweetText, 
+          personalityData,
+          objectives,
+          state.preferences?.favorite_topics || []
+        );
         
         const imageResult = await imageGenActivity.execute(
           apiKeys,
@@ -171,37 +192,91 @@ export class PostTweetActivity implements Activity {
     return tweetHistory.slice(0, 10);
   }
   
-  private buildChatPrompt(personality: Record<string, any>, recentTweets: string[]): string {
-    const traitLines = Object.entries(personality)
-      .map(([trait, value]) => `${trait}: ${value}`)
+  private buildChatPrompt(
+    personality: Record<string, any>, 
+    communicationStyle: Record<string, any>,
+    backstory: Record<string, any>,
+    objectives: { primary: string; secondary?: string[] },
+    recentTweets: string[]
+  ): string {
+    // Create a detailed personality description
+    const personalityDesc = Object.entries(personality)
+      .map(([trait, value]) => {
+        // Convert the trait name to a more readable format
+        const readableTrait = trait.replace(/_/g, ' ');
+        return `${readableTrait}: ${(value as number).toFixed(1)}`;
+      })
       .join("\n");
     
-    const personalityStr = traitLines || "(No personality traits defined)";
+    // Add communication style
+    let commStyleDesc = "";
+    if (communicationStyle.tone) {
+      const toneStr = Object.entries(communicationStyle.tone)
+        .map(([tone, value]) => `${tone}: ${(value as number).toFixed(1)}`)
+        .join(", ");
+      commStyleDesc += `- Tone: ${toneStr}\n`;
+    }
+    if (communicationStyle.verbosity) {
+      commStyleDesc += `- Verbosity: ${(communicationStyle.verbosity as number).toFixed(1)}\n`;
+    }
     
+    // Add backstory highlights
+    let backstoryDesc = "";
+    if (backstory.core_values && Array.isArray(backstory.core_values)) {
+      backstoryDesc = `Core values: ${backstory.core_values.join(", ")}\n`;
+    }
+    
+    // Add objectives
+    const objectivesDesc = `Primary objective: ${objectives.primary}\n`;
+    
+    // Recent tweets
     const lastTweetsStr = recentTweets.length > 0
       ? recentTweets.map(tweet => `- ${tweet}`).join("\n")
       : "(No recent tweets)";
     
     return (
-      `Our digital being has these personality traits:\n` +
-      `${personalityStr}\n\n` +
+      `Our digital being has the following personality traits:\n` +
+      `${personalityDesc}\n\n` +
+      `Communication style:\n${commStyleDesc}\n` +
+      `${backstoryDesc}` +
+      `${objectivesDesc}\n` +
       `Here are recent tweets:\n` +
       `${lastTweetsStr}\n\n` +
-      `Write a new short tweet (under 280 chars), consistent with the above, ` +
-      `but not repeating old tweets. Avoid hashtags or repeated phrases.\n`
+      `Write a new short tweet (under 280 chars), that:
+      1. Reflects the personality traits above, especially the most pronounced traits
+      2. Is consistent with the communication style
+      3. Aligns with the core values and objectives
+      4. Is fresh (not repeating old tweets)
+      5. Avoids excessive hashtags
+      6. Feels authentic and engaging\n`
     );
   }
   
-  private buildImagePrompt(tweetText: string, personality: Record<string, any>): string {
-    const personalityStr = Object.entries(personality)
-      .map(([trait, value]) => `${trait}: ${value}`)
+  private buildImagePrompt(
+    tweetText: string, 
+    personality: Record<string, any>,
+    objectives: { primary: string; secondary?: string[] },
+    favoriteTopics: string[]
+  ): string {
+    // Select the top 3 personality traits (highest values)
+    const topTraits = Object.entries(personality)
+      .sort((a, b) => (b[1] as number) - (a[1] as number))
+      .slice(0, 3)
+      .map(([trait, value]) => `${trait.replace(/_/g, ' ')}: ${(value as number).toFixed(1)}`)
       .join("\n");
     
+    const topicsStr = favoriteTopics.length > 0 
+      ? `Favorite topics: ${favoriteTopics.join(", ")}`
+      : "";
+    
     return (
-      `Our digital being has these personality traits:\n` +
-      `${personalityStr}\n\n` +
-      `And is creating a tweet with the text: ${tweetText}\n\n` +
-      `Generate an image that represents the story of the tweet and reflects the personality traits. Do not include the tweet text in the image.`
+      `Generate an image that represents the following tweet, capturing the essence and mood:\n\n` +
+      `"${tweetText}"\n\n` +
+      `This image should reflect these dominant personality traits:\n${topTraits}\n\n` +
+      `Primary objective: ${objectives.primary}\n` +
+      `${topicsStr}\n\n` +
+      `The image should be visually engaging, authentic to the personality, and relate to the tweet's message.` +
+      `Do not include any text in the image. Focus on imagery that complements the tweet.`
     );
   }
 }
