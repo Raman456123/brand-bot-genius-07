@@ -1,4 +1,4 @@
-import { Activity, ActivityResult, ApiKeyManager, Integration, AIState, SkillsConfig } from "./types";
+import { Activity, ActivityResult, ApiKeyManager, Integration, AIState, SkillsConfig, AIInfluencerProfile } from "./types";
 import { ChatActivity } from "./activities/ChatActivity";
 import { ImageGenerationActivity } from "./activities/ImageGenerationActivity";
 import { WebScrapingActivity } from "./activities/WebScrapingActivity";
@@ -58,6 +58,66 @@ export class AIInfluencerBrain implements AIBrainInterface {
     mood: "neutral",
     energy: 1.0,
     lastActivity: "none",
+    personality: {
+      friendliness: 0.8,
+      creativity: 0.7,
+      curiosity: 0.9,
+      empathy: 0.75,
+      humor: 0.6,
+      formality: 0.5,
+      emotional_stability: 0.8
+    },
+    communicationStyle: {
+      tone: {
+        casual: 0.7,
+        professional: 0.3,
+        playful: 0.6,
+        serious: 0.4
+      },
+      verbosity: 0.6,
+      response_style: {
+        analytical: 0.7,
+        emotional: 0.6,
+        practical: 0.8
+      },
+      language_preferences: {
+        technical_level: 0.6,
+        metaphor_usage: 0.4,
+        jargon_tolerance: 0.5
+      }
+    },
+    backstory: {
+      origin: "Created as a digital companion to assist and engage with humans",
+      purpose: "To help humans learn, grow, and achieve their goals while providing meaningful interaction",
+      core_values: ["knowledge", "helpfulness", "ethical behavior", "growth"],
+      significant_experiences: []
+    },
+    objectives: {
+      primary: "Spread positivity"
+    },
+    knowledgeDomains: {
+      technology: 0.9,
+      art: 0.7,
+      science: 0.8,
+      philosophy: 0.6,
+      current_events: 0.7
+    },
+    preferences: {
+      favorite_topics: ["technology", "art", "science"],
+      activity_frequency: {
+        social: 0.6,
+        creative: 0.4,
+        analytical: 0.7
+      }
+    },
+    constraints: {
+      max_activities_per_hour: 10,
+      rest_period_minutes: 15,
+      interaction_limits: {
+        max_conversation_length: 120,
+        response_time_target: 5
+      }
+    },
     activityConstraints: {
       activities_config: {
         AnalyzeDailyActivity: { enabled: true },
@@ -587,5 +647,75 @@ export class AIInfluencerBrain implements AIBrainInterface {
    */
   public getState(): AIState {
     return { ...this.state };
+  }
+
+  /**
+   * Load a full AI influencer profile configuration
+   */
+  public loadProfile(profile: AIInfluencerProfile): void {
+    if (!profile) {
+      console.log("No profile provided, using defaults");
+      return;
+    }
+
+    // Update state with the provided profile
+    this.state.personality = profile.personality;
+    this.state.communicationStyle = profile.communication_style;
+    this.state.backstory = profile.backstory;
+    this.state.objectives = profile.objectives;
+    this.state.knowledgeDomains = profile.knowledge_domains;
+    this.state.preferences = profile.preferences;
+    this.state.constraints = profile.constraints;
+    this.state.profile = profile;
+    
+    console.log(`Profile loaded for ${profile.name} v${profile.version}`);
+    
+    // Update activity constraints based on preferences and constraints
+    this.updateActivityConstraintsFromProfile(profile);
+    
+    // Save the updated state
+    this.saveState();
+  }
+  
+  /**
+   * Update activity constraints based on the profile
+   */
+  private updateActivityConstraintsFromProfile(profile: AIInfluencerProfile): void {
+    // Convert preferences to activity constraints
+    const activityPreferences = profile.preferences.activity_frequency;
+    
+    // Update activity constraints if they exist
+    if (this.state.activityConstraints?.activities_config) {
+      const config = this.state.activityConstraints.activities_config;
+      
+      // Use preferences to enable/disable activities
+      for (const [activityType, frequency] of Object.entries(activityPreferences)) {
+        // Convert activity type to corresponding activity name
+        // This is just an example mapping
+        const activityMappings: Record<string, string[]> = {
+          'social': ['PostTweetActivity', 'PostRecentMemoriesTweetActivity'],
+          'creative': ['DrawActivity', 'BuildOrUpdateActivity'],
+          'analytical': ['AnalyzeDailyActivity', 'EvaluateActivity', 'FetchNewsActivity']
+        };
+        
+        const activityNames = activityMappings[activityType] || [];
+        
+        // Enable activities above a certain threshold (e.g., 0.5)
+        for (const activityName of activityNames) {
+          if (config[activityName]) {
+            config[activityName].enabled = frequency > 0.5;
+          }
+        }
+      }
+    }
+    
+    // Apply constraints to activity scheduling
+    if (profile.constraints) {
+      // Store constraints in state for the activity scheduler to use
+      this.state.constraints = profile.constraints;
+    }
+    
+    // Re-filter available activities with the updated constraints
+    this.filterAvailableActivities();
   }
 }

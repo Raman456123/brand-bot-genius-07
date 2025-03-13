@@ -1,13 +1,17 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AIInfluencerController } from "@/lib/ai-influencer/controller";
-import { Play, Pause, RotateCcw, Terminal, Settings, Activity, Info } from "lucide-react";
+import { Play, Pause, RotateCcw, Terminal, Settings, Activity, Info, User } from "lucide-react";
 import { ActivityLogs } from "@/components/ai-influencer/ActivityLogs";
 import { ApiKeyManager } from "@/components/ai-influencer/ApiKeyManager";
+import { AIInfluencerProfile, Personality } from "@/lib/ai-influencer/types";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 
 interface ActivityLog {
   timestamp: string;
@@ -28,6 +32,20 @@ export default function Influencer() {
   });
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, Record<string, boolean>>>({});
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [personality, setPersonality] = useState<Personality>({
+    friendliness: 0.8,
+    creativity: 0.7,
+    curiosity: 0.9,
+    empathy: 0.75,
+    humor: 0.6,
+    formality: 0.5,
+    emotional_stability: 0.8
+  });
+  const [primaryObjective, setPrimaryObjective] = useState("Spread positivity");
+  const [backstoryOrigin, setBackstoryOrigin] = useState("Created as a digital companion to assist and engage with humans");
+  const [backstoryPurpose, setBackstoryPurpose] = useState("To help humans learn, grow, and achieve their goals while providing meaningful interaction");
+  const [coreValues, setCoreValues] = useState("knowledge,helpfulness,ethical behavior,growth");
+  const [favTopics, setFavTopics] = useState("technology,art,science");
   
   const controllerRef = useRef<AIInfluencerController | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -58,6 +76,26 @@ export default function Influencer() {
           mood: state.mood || "neutral",
           lastActivity: state.lastActivity || "None"
         });
+        
+        // Update personality state if available
+        if (state.personality) {
+          setPersonality(state.personality);
+        }
+        
+        // Update other profile-related states if available
+        if (state.objectives?.primary) {
+          setPrimaryObjective(state.objectives.primary);
+        }
+        
+        if (state.backstory) {
+          setBackstoryOrigin(state.backstory.origin);
+          setBackstoryPurpose(state.backstory.purpose);
+          setCoreValues(state.backstory.core_values.join(','));
+        }
+        
+        if (state.preferences?.favorite_topics) {
+          setFavTopics(state.preferences.favorite_topics.join(','));
+        }
       });
       
       controllerRef.current.on('activityCompleted', (result, activityName) => {
@@ -168,6 +206,80 @@ export default function Influencer() {
     await controllerRef.current.runActivityCycle();
   };
 
+  const handleSaveProfile = () => {
+    if (!controllerRef.current) return;
+    
+    // Create profile object from current state
+    const profile: AIInfluencerProfile = {
+      name: "Pippin",
+      version: "1.0.0",
+      personality: personality,
+      communication_style: {
+        tone: {
+          casual: 0.7,
+          professional: 0.3,
+          playful: 0.6,
+          serious: 0.4
+        },
+        verbosity: 0.6,
+        response_style: {
+          analytical: 0.7,
+          emotional: 0.6,
+          practical: 0.8
+        },
+        language_preferences: {
+          technical_level: 0.6,
+          metaphor_usage: 0.4,
+          jargon_tolerance: 0.5
+        }
+      },
+      backstory: {
+        origin: backstoryOrigin,
+        purpose: backstoryPurpose,
+        core_values: coreValues.split(',').map(v => v.trim()),
+        significant_experiences: []
+      },
+      objectives: {
+        primary: primaryObjective
+      },
+      knowledge_domains: {
+        technology: 0.9,
+        art: 0.7,
+        science: 0.8,
+        philosophy: 0.6,
+        current_events: 0.7
+      },
+      preferences: {
+        favorite_topics: favTopics.split(',').map(t => t.trim()),
+        activity_frequency: {
+          social: 0.6,
+          creative: 0.4,
+          analytical: 0.7
+        }
+      },
+      constraints: {
+        max_activities_per_hour: 10,
+        rest_period_minutes: 15,
+        interaction_limits: {
+          max_conversation_length: 120,
+          response_time_target: 5
+        }
+      },
+      setup_complete: true
+    };
+    
+    // Load profile into brain
+    controllerRef.current.getBrain().loadProfile(profile);
+    
+    setLogs(prev => [...prev, {
+      timestamp: new Date().toISOString(),
+      activity_type: "Config",
+      success: true,
+      error: null,
+      data: { message: "🧠 Updated AI influencer profile and personality" }
+    }]);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-6">
       <div className="max-w-6xl mx-auto">
@@ -216,6 +328,9 @@ export default function Influencer() {
             </TabsTrigger>
             <TabsTrigger value="config" className="flex items-center gap-2">
               <Settings className="h-4 w-4" /> Configuration
+            </TabsTrigger>
+            <TabsTrigger value="personality" className="flex items-center gap-2">
+              <User className="h-4 w-4" /> Personality
             </TabsTrigger>
             <TabsTrigger value="about" className="flex items-center gap-2">
               <Info className="h-4 w-4" /> About Pippin
@@ -299,6 +414,100 @@ export default function Influencer() {
                 Set up the required API keys to enable various activities. The AI Influencer needs at least one LLM API key to function properly.
               </AlertDescription>
             </Alert>
+          </TabsContent>
+          
+          <TabsContent value="personality" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Personality Configuration</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Personality Traits</h3>
+                  
+                  <div className="space-y-6">
+                    {Object.entries(personality).map(([trait, value]) => (
+                      <div key={trait} className="space-y-2">
+                        <div className="flex justify-between">
+                          <Label htmlFor={trait} className="capitalize">
+                            {trait.replace(/_/g, ' ')}
+                          </Label>
+                          <span className="text-sm">{(value * 10).toFixed(1)}/10</span>
+                        </div>
+                        <Slider
+                          id={trait}
+                          value={[value * 10]}
+                          min={0}
+                          max={10}
+                          step={0.1}
+                          onValueChange={(values) => {
+                            const newValue = values[0] / 10;
+                            setPersonality(prev => ({
+                              ...prev,
+                              [trait]: newValue
+                            }));
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Objectives</h3>
+                  <div className="space-y-2">
+                    <Label htmlFor="primary-objective">Primary Objective</Label>
+                    <Input
+                      id="primary-objective"
+                      value={primaryObjective}
+                      onChange={(e) => setPrimaryObjective(e.target.value)}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Backstory</h3>
+                  <div className="space-y-2">
+                    <Label htmlFor="backstory-origin">Origin</Label>
+                    <Textarea
+                      id="backstory-origin"
+                      value={backstoryOrigin}
+                      onChange={(e) => setBackstoryOrigin(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="backstory-purpose">Purpose</Label>
+                    <Textarea
+                      id="backstory-purpose"
+                      value={backstoryPurpose}
+                      onChange={(e) => setBackstoryPurpose(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="core-values">Core Values (comma-separated)</Label>
+                    <Input
+                      id="core-values"
+                      value={coreValues}
+                      onChange={(e) => setCoreValues(e.target.value)}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Preferences</h3>
+                  <div className="space-y-2">
+                    <Label htmlFor="favorite-topics">Favorite Topics (comma-separated)</Label>
+                    <Input
+                      id="favorite-topics"
+                      value={favTopics}
+                      onChange={(e) => setFavTopics(e.target.value)}
+                    />
+                  </div>
+                </div>
+                
+                <Button onClick={handleSaveProfile}>Save Personality Profile</Button>
+              </CardContent>
+            </Card>
           </TabsContent>
           
           <TabsContent value="about">

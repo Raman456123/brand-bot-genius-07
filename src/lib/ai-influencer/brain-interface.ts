@@ -1,5 +1,5 @@
 
-import { AIState, Activity, ActivityResult } from './types';
+import { AIState, Activity, ActivityResult, AIInfluencerProfile } from './types';
 
 export interface AIBrainInterface {
   loadState(): Promise<void>;
@@ -13,6 +13,9 @@ export interface AIBrainInterface {
   // Activity management
   getAvailableActivities(): Activity[];
   loadActivities(): void;
+  
+  // Configuration management
+  loadProfile(profile: AIInfluencerProfile): void;
   
   // API key management
   setApiKey(activityName: string, keyName: string, keyValue: string): Promise<boolean>;
