@@ -1,5 +1,7 @@
+
 import { Activity, ActivityResult, ApiKeyManager, Integration, AIState } from "./types";
 import { ChatActivity } from "./activities/ChatActivity";
+import { ImageGenerationActivity } from "./activities/ImageGenerationActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -64,7 +66,15 @@ export class AIInfluencerBrain {
       maxTokens: 150
     });
     
+    // Register the image generation activity
+    const imageGenerationActivity = new ImageGenerationActivity({
+      size: "1024x1024",
+      format: "png",
+      maxGenerationsPerDay: 5 // Limit for testing
+    });
+    
     this.activities.push(chatActivity);
+    this.activities.push(imageGenerationActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
@@ -119,6 +129,16 @@ export class AIInfluencerBrain {
     });
 
     this.availableActivities = [...this.activities];
+  }
+
+  /**
+   * Load activities from storage or initialize them
+   * This method is added to fix the controller.ts error
+   */
+  public loadActivities(): void {
+    // Activities are already initialized in the constructor
+    // This method exists to satisfy the controller interface
+    this.initializeActivities();
   }
 
   /**
@@ -186,6 +206,13 @@ export class AIInfluencerBrain {
    */
   public async getApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>> {
     return this.apiKeyManager.getApiKeyStatuses();
+  }
+
+  /**
+   * Select the next activity to run (fix for controller.ts error)
+   */
+  public selectNextActivity(): Activity | null {
+    return this.selectActivity();
   }
 
   /**

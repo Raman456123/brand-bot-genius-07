@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,6 +31,12 @@ const TestAI = () => {
   const [chatPrompt, setChatPrompt] = useState("");
   const [chatResponse, setChatResponse] = useState("");
   const [isChattingLoading, setIsChattingLoading] = useState(false);
+  
+  // Image generation states
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [generatedImageUrl, setGeneratedImageUrl] = useState("");
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  
   const controllerRef = useRef<AIInfluencerController | null>(null);
 
   useEffect(() => {
@@ -40,8 +47,11 @@ const TestAI = () => {
         addLog(message);
       });
       
-      controllerRef.current.on('activityCompleted', (result: ActivityResult, activityName: string) => {
+      controllerRef.current.on('activityCompleted', (result: ActivityResult) => {
         const newEnergy = controllerRef.current?.getBrain().getState().energy || 0;
+        
+        // Get the activity name from the result
+        const activityName = controllerRef.current?.getBrain().getState().lastActivity || "";
         
         setActivities(prev => prev.map(a => 
           a.name === activityName 
@@ -175,6 +185,35 @@ const TestAI = () => {
       addLog(`Chat exception: ${errorMessage}`);
     } finally {
       setIsChattingLoading(false);
+    }
+  };
+
+  const handleImageGeneration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!imagePrompt.trim() || !controllerRef.current) return;
+    
+    setIsGeneratingImage(true);
+    setGeneratedImageUrl("");
+    addLog(`Generating image with prompt: "${imagePrompt}"`);
+    
+    try {
+      const result = await controllerRef.current.executeActivity("generate_image", {
+        prompt: imagePrompt,
+        size: "1024x1024",
+        format: "png"
+      });
+      
+      if (result.success && result.data) {
+        setGeneratedImageUrl(result.data.url);
+        addLog(`Image generated successfully! Generation ID: ${result.data.generationId}`);
+      } else {
+        addLog(`Image generation error: ${result.error}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`Image generation exception: ${errorMessage}`);
+    } finally {
+      setIsGeneratingImage(false);
     }
   };
 
@@ -371,39 +410,90 @@ const TestAI = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <Card className="p-6 md:col-span-2">
-            <h2 className="text-xl font-semibold mb-4">Test Chat Activity</h2>
-            <form onSubmit={handleChatSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="chat-prompt">Enter prompt</Label>
-                <Textarea
-                  id="chat-prompt"
-                  placeholder="Type your message here..."
-                  value={chatPrompt}
-                  onChange={(e) => setChatPrompt(e.target.value)}
-                  className="min-h-[100px]"
-                />
-              </div>
-              <Button type="submit" disabled={isChattingLoading || !chatPrompt.trim()}>
-                {isChattingLoading ? "Sending..." : "Send Message"}
-              </Button>
-            </form>
-            
-            {chatResponse && (
-              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
-                <h3 className="font-medium mb-2">Response:</h3>
-                <p className="whitespace-pre-wrap">{chatResponse}</p>
-              </div>
-            )}
-            
-            {!apiKeyStatuses["chat"]?.["OPENAI"] && (
-              <Alert className="mt-4">
-                <AlertTitle>API Key Required</AlertTitle>
-                <AlertDescription>
-                  You need to set an OpenAI API key to use the chat activity. Click "Configure API Keys" 
-                  to add your key.
-                </AlertDescription>
-              </Alert>
-            )}
+            <Tabs defaultValue="chat">
+              <TabsList className="mb-4">
+                <TabsTrigger value="chat">Chat</TabsTrigger>
+                <TabsTrigger value="image">Image Generation</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="chat">
+                <h2 className="text-xl font-semibold mb-4">Test Chat Activity</h2>
+                <form onSubmit={handleChatSubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="chat-prompt">Enter prompt</Label>
+                    <Textarea
+                      id="chat-prompt"
+                      placeholder="Type your message here..."
+                      value={chatPrompt}
+                      onChange={(e) => setChatPrompt(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  <Button type="submit" disabled={isChattingLoading || !chatPrompt.trim()}>
+                    {isChattingLoading ? "Sending..." : "Send Message"}
+                  </Button>
+                </form>
+                
+                {chatResponse && (
+                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+                    <h3 className="font-medium mb-2">Response:</h3>
+                    <p className="whitespace-pre-wrap">{chatResponse}</p>
+                  </div>
+                )}
+                
+                {!apiKeyStatuses["chat"]?.["OPENAI"] && (
+                  <Alert className="mt-4">
+                    <AlertTitle>API Key Required</AlertTitle>
+                    <AlertDescription>
+                      You need to set an OpenAI API key to use the chat activity. Click "Configure API Keys" 
+                      to add your key.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="image">
+                <h2 className="text-xl font-semibold mb-4">Test Image Generation</h2>
+                <form onSubmit={handleImageGeneration} className="space-y-4">
+                  <div>
+                    <Label htmlFor="image-prompt">Image Description</Label>
+                    <Textarea
+                      id="image-prompt"
+                      placeholder="Describe the image you want to generate..."
+                      value={imagePrompt}
+                      onChange={(e) => setImagePrompt(e.target.value)}
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  <Button type="submit" disabled={isGeneratingImage || !imagePrompt.trim()}>
+                    {isGeneratingImage ? "Generating..." : "Generate Image"}
+                  </Button>
+                </form>
+                
+                {generatedImageUrl && (
+                  <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+                    <h3 className="font-medium mb-2">Generated Image:</h3>
+                    <div className="mt-2 flex justify-center">
+                      <img 
+                        src={generatedImageUrl} 
+                        alt="AI generated" 
+                        className="max-w-full h-auto rounded-md border border-gray-300"
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {!apiKeyStatuses["generate_image"]?.["OPENAI"] && (
+                  <Alert className="mt-4">
+                    <AlertTitle>API Key Required</AlertTitle>
+                    <AlertDescription>
+                      You need to set an OpenAI API key to use the image generation activity. Click "Configure API Keys" 
+                      to add your key.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </TabsContent>
+            </Tabs>
           </Card>
           
           <Card className="p-6">

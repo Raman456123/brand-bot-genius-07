@@ -1,7 +1,9 @@
+
 export interface ActivityResult {
   success: boolean;
   data: any | null;
   error: string | null;
+  metadata?: Record<string, any>;
 }
 
 export interface Activity {
@@ -55,4 +57,20 @@ export interface Integration {
   logoUrl?: string;
   connect?: () => Promise<boolean>;
   disconnect?: () => Promise<boolean>;
+}
+
+export interface ImageGenerationOptions {
+  size?: string;
+  format?: "png" | "jpg";
+  maxGenerationsPerDay?: number;
+}
+
+export interface ImageGenerationResult {
+  url: string;
+  width: number;
+  height: number;
+  format: string;
+  seed: number;
+  generationId: string;
+  prompt: string;
 }
