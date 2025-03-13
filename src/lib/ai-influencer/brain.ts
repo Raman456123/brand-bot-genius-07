@@ -14,6 +14,7 @@ import { NapActivity } from "./activities/NapActivity";
 import { PostTweetActivity } from "./activities/PostTweetActivity";
 import { PostRecentMemoriesTweetActivity } from "./activities/PostRecentMemoriesTweetActivity";
 import { SuggestNewActivitiesActivity } from "./activities/SuggestNewActivitiesActivity";
+import { TestActivity } from "./activities/TestActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -177,6 +178,9 @@ export class AIInfluencerBrain {
       maxTokens: 300
     });
     
+    // Register the test activity
+    const testActivity = new TestActivity();
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -192,6 +196,7 @@ export class AIInfluencerBrain {
     this.activities.push(postTweetActivity);
     this.activities.push(postRecentMemoriesTweetActivity);
     this.activities.push(suggestNewActivitiesActivity);
+    this.activities.push(testActivity);
     
     this.availableActivities = [...this.activities];
   }
