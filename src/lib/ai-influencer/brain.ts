@@ -1,4 +1,4 @@
-import { Activity, ActivityResult, ApiKeyManager, Integration } from "./types";
+import { Activity, ActivityResult, ApiKeyManager, Integration, AIState } from "./types";
 
 /**
  * Enhanced API key manager that uses localStorage with persistence
