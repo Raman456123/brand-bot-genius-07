@@ -552,5 +552,39 @@ export class AIInfluencerBrain implements AIBrainInterface {
   }
 
   /**
-   * Load AI
+   * Load AI influencer state from storage
+   */
+  public async loadState(): Promise<void> {
+    try {
+      const storedState = localStorage.getItem(this.storageKey);
+      if (storedState) {
+        const parsedState = JSON.parse(storedState);
+        this.state = { ...this.state, ...parsedState };
+        console.log('State loaded from storage');
+      } else {
+        console.log('No stored state found, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading state:', error);
+    }
+  }
 
+  /**
+   * Save AI influencer state to storage
+   */
+  public async saveState(): Promise<void> {
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(this.state));
+      console.log('State saved to storage');
+    } catch (error) {
+      console.error('Error saving state:', error);
+    }
+  }
+
+  /**
+   * Get the current AI influencer state
+   */
+  public getState(): AIState {
+    return { ...this.state };
+  }
+}
