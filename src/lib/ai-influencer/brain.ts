@@ -13,6 +13,7 @@ import { FetchNewsActivity } from "./activities/FetchNewsActivity";
 import { NapActivity } from "./activities/NapActivity";
 import { PostTweetActivity } from "./activities/PostTweetActivity";
 import { PostRecentMemoriesTweetActivity } from "./activities/PostRecentMemoriesTweetActivity";
+import { SuggestNewActivitiesActivity } from "./activities/SuggestNewActivitiesActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -170,6 +171,12 @@ export class AIInfluencerBrain {
       ]
     });
     
+    // Register the suggest new activities activity
+    const suggestNewActivitiesActivity = new SuggestNewActivitiesActivity({
+      systemPrompt: "You are an AI that helps brainstorm new or improved activities to achieve the being's goals, leveraging the skills the system has available. Provide short, actionable suggestions focusing on feasibility, alignment with constraints, and creativity.",
+      maxTokens: 300
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -184,59 +191,8 @@ export class AIInfluencerBrain {
     this.activities.push(napActivity);
     this.activities.push(postTweetActivity);
     this.activities.push(postRecentMemoriesTweetActivity);
+    this.activities.push(suggestNewActivitiesActivity);
     
-    // Example activities (replace with your actual activities)
-    this.activities.push({
-      name: "get_trending_topics",
-      description: "Fetches trending topics from social media",
-      energyCost: 0.3,
-      cooldown: 300000, // 5 minutes
-      requiredApiKeys: ["TRENDSAPI"],
-      canRun: async (apiKeys: Record<string, string>, state: any) => {
-        // Check if energy is sufficient and API key is available
-        return state.energy > 0.3 && !!apiKeys["TRENDSAPI"];
-      },
-      execute: async (apiKeys: Record<string, string>, state: any) => {
-        // Placeholder for fetching trending topics
-        console.log("Fetching trending topics with API key:", apiKeys["TRENDSAPI"]);
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
-        return {
-          success: true,
-          data: { topics: ["Topic 1", "Topic 2", "Topic 3"] },
-          error: null
-        };
-      }
-    });
-
-    this.activities.push({
-      name: "write_tweet",
-      description: "Writes a tweet about a given topic",
-      energyCost: 0.2,
-      cooldown: 180000, // 3 minutes
-      requiredApiKeys: ["TWITTERAPI"],
-      canRun: async (apiKeys: Record<string, string>, state: any) => {
-        // Check if energy is sufficient and API key is available
-        return state.energy > 0.2 && !!apiKeys["TWITTERAPI"];
-      },
-      execute: async (apiKeys: Record<string, string>, state: any, params: any) => {
-        // Placeholder for writing a tweet
-        if (!params?.topic) {
-          return {
-            success: false,
-            error: "No topic provided for tweet",
-            data: null
-          };
-        }
-        console.log("Writing tweet about", params.topic, "with API key:", apiKeys["TWITTERAPI"]);
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
-        return {
-          success: true,
-          data: { tweetId: "1234567890" },
-          error: null
-        };
-      }
-    });
-
     this.availableActivities = [...this.activities];
   }
 
@@ -419,4 +375,3 @@ export class AIInfluencerBrain {
     return result;
   }
 }
-

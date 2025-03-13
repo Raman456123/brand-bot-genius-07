@@ -231,3 +231,14 @@ export interface PostRecentMemoriesTweetResult {
   recentMemoriesUsed: string[];
   imageCount: number;
 }
+
+export interface SuggestNewActivitiesOptions {
+  systemPrompt?: string;
+  maxTokens?: number;
+}
+
+export interface SuggestNewActivitiesResult {
+  suggestions: string;
+  model?: string;
+  finishReason?: string;
+}
