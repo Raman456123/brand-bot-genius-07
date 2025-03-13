@@ -7,6 +7,7 @@ export interface Activity {
   energyCost: number;
   cooldown: number; // in seconds
   requiredSkills: string[];
+  requiredApiKeys?: string[]; // New field for required API keys
   execute: () => Promise<ActivityResult>;
 }
 
@@ -32,4 +33,13 @@ export interface AIState {
     friendliness: number;
     curiosity: number;
   };
+}
+
+/**
+ * API Key management interface
+ */
+export interface ApiKeyManager {
+  checkApiKeyExists: (activityName: string, keyName: string) => Promise<boolean>;
+  getApiKey: (activityName: string, keyName: string) => Promise<string | null>;
+  setApiKey: (activityName: string, keyName: string, value: string) => Promise<boolean>;
 }

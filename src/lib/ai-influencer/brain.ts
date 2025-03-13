@@ -1,5 +1,35 @@
 
-import { Activity, ActivityResult } from "./types";
+import { Activity, ActivityResult, ApiKeyManager } from "./types";
+
+/**
+ * Simple API key manager that uses localStorage
+ */
+class LocalStorageApiKeyManager implements ApiKeyManager {
+  private getKeyId(activityName: string, keyName: string): string {
+    return `ai_influencer_${activityName.toLowerCase()}_${keyName.toLowerCase()}`;
+  }
+
+  async checkApiKeyExists(activityName: string, keyName: string): Promise<boolean> {
+    const keyId = this.getKeyId(activityName, keyName);
+    return localStorage.getItem(keyId) !== null;
+  }
+
+  async getApiKey(activityName: string, keyName: string): Promise<string | null> {
+    const keyId = this.getKeyId(activityName, keyName);
+    return localStorage.getItem(keyId);
+  }
+
+  async setApiKey(activityName: string, keyName: string, value: string): Promise<boolean> {
+    try {
+      const keyId = this.getKeyId(activityName, keyName);
+      localStorage.setItem(keyId, value);
+      return true;
+    } catch (error) {
+      console.error("Error storing API key:", error);
+      return false;
+    }
+  }
+}
 
 /**
  * AIInfluencerBrain - A TypeScript adaptation of Pippin's Python framework
@@ -17,9 +47,11 @@ export class AIInfluencerBrain {
       curiosity: 0.8
     }
   };
+  private apiKeyManager: ApiKeyManager;
 
-  constructor() {
+  constructor(customApiKeyManager?: ApiKeyManager) {
     // Initialize the brain
+    this.apiKeyManager = customApiKeyManager || new LocalStorageApiKeyManager();
   }
 
   /**
@@ -64,7 +96,20 @@ export class AIInfluencerBrain {
         energyCost: 0.4,
         cooldown: 7200, // 2 hours in seconds
         requiredSkills: ["analysis"],
+        requiredApiKeys: ["trendsapi"],
         execute: async (): Promise<ActivityResult> => {
+          // Check if we have the required API key
+          const hasApiKey = await this.apiKeyManager.checkApiKeyExists("AnalyzeTrends", "trendsapi");
+          if (!hasApiKey) {
+            return {
+              success: false,
+              data: null,
+              error: "Missing required API key: trendsapi",
+              metadata: {},
+              timestamp: new Date().toISOString()
+            };
+          }
+          
           return {
             success: true,
             data: "Analyzed current trends and identified 3 potential content topics",
@@ -113,9 +158,32 @@ export class AIInfluencerBrain {
   }
 
   /**
+   * Check if an activity has all required API keys
+   */
+  async checkActivityApiKeys(activity: Activity): Promise<{hasAllKeys: boolean, missingKeys: string[]}> {
+    const missingKeys: string[] = [];
+    
+    if (!activity.requiredApiKeys || activity.requiredApiKeys.length === 0) {
+      return { hasAllKeys: true, missingKeys: [] };
+    }
+    
+    for (const key of activity.requiredApiKeys) {
+      const exists = await this.apiKeyManager.checkApiKeyExists(activity.name, key);
+      if (!exists) {
+        missingKeys.push(key);
+      }
+    }
+    
+    return {
+      hasAllKeys: missingKeys.length === 0,
+      missingKeys
+    };
+  }
+
+  /**
    * Select the next activity based on current state and constraints
    */
-  selectNextActivity(): Activity | null {
+  async selectNextActivity(): Promise<Activity | null> {
     const availableActivities = this.getAvailableActivities();
     
     // Filter activities based on energy requirements
@@ -127,9 +195,22 @@ export class AIInfluencerBrain {
       return null;
     }
     
+    // Filter activities based on API key requirements
+    const activitiesWithApiKeys: Activity[] = [];
+    for (const activity of suitableActivities) {
+      const { hasAllKeys } = await this.checkActivityApiKeys(activity);
+      if (hasAllKeys) {
+        activitiesWithApiKeys.push(activity);
+      }
+    }
+    
+    if (activitiesWithApiKeys.length === 0) {
+      console.log("No activities have all required API keys");
+      return suitableActivities[0]; // Fallback to first activity even without API keys
+    }
+    
     // Weighted random selection based on personality
-    // This is a simplified version of the Python implementation
-    const weights = suitableActivities.map(activity => {
+    const weights = activitiesWithApiKeys.map(activity => {
       let weight = 1.0;
       
       // Different activities might align better with different personality traits
@@ -148,18 +229,25 @@ export class AIInfluencerBrain {
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
     let randomValue = Math.random() * totalWeight;
     
-    for (let i = 0; i < suitableActivities.length; i++) {
+    for (let i = 0; i < activitiesWithApiKeys.length; i++) {
       randomValue -= weights[i];
       if (randomValue <= 0) {
         // Record the time we selected this activity
-        this.lastActivityTimes[suitableActivities[i].name] = new Date();
-        return suitableActivities[i];
+        this.lastActivityTimes[activitiesWithApiKeys[i].name] = new Date();
+        return activitiesWithApiKeys[i];
       }
     }
     
     // Fallback to the first activity if something went wrong with the weighted selection
-    this.lastActivityTimes[suitableActivities[0].name] = new Date();
-    return suitableActivities[0];
+    this.lastActivityTimes[activitiesWithApiKeys[0].name] = new Date();
+    return activitiesWithApiKeys[0];
+  }
+
+  /**
+   * Set an API key for an activity
+   */
+  async setApiKey(activityName: string, keyName: string, value: string): Promise<boolean> {
+    return this.apiKeyManager.setApiKey(activityName, keyName, value);
   }
 
   /**
@@ -167,6 +255,18 @@ export class AIInfluencerBrain {
    */
   async executeActivity(activity: Activity): Promise<ActivityResult> {
     try {
+      // Check API key requirements
+      const { hasAllKeys, missingKeys } = await this.checkActivityApiKeys(activity);
+      if (!hasAllKeys) {
+        return {
+          success: false,
+          data: null,
+          error: `Missing required API keys: ${missingKeys.join(", ")}`,
+          metadata: {},
+          timestamp: new Date().toISOString()
+        };
+      }
+      
       // Log the start of the activity
       console.log(`Starting activity: ${activity.name}`);
       
