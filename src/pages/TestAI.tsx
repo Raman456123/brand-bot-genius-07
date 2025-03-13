@@ -6,8 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AIInfluencerBrain } from "@/lib/ai-influencer/brain";
-import { Activity } from "@/lib/ai-influencer/types";
+import { Activity, Integration } from "@/lib/ai-influencer/types";
 
 const TestAI = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -21,6 +22,8 @@ const TestAI = () => {
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
   const [apiKeyValue, setApiKeyValue] = useState("");
   const [apiKeyName, setApiKeyName] = useState("");
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, Record<string, boolean>>>({});
   const brainRef = useRef<AIInfluencerBrain | null>(null);
 
   useEffect(() => {
@@ -37,9 +40,22 @@ const TestAI = () => {
           status: "available",
           requiredApiKeys: a.requiredApiKeys 
         })));
+        
+        // Load integrations
+        setIntegrations(brainRef.current.getAvailableIntegrations());
+        
+        // Load API key statuses
+        updateApiKeyStatuses();
       }
     }
   }, []);
+
+  const updateApiKeyStatuses = async () => {
+    if (brainRef.current) {
+      const statuses = await brainRef.current.getApiKeyStatuses();
+      setApiKeyStatuses(statuses);
+    }
+  };
 
   const addLog = (message: string) => {
     setLogs(prev => [...prev, message]);
@@ -125,6 +141,9 @@ const TestAI = () => {
       addLog(`Successfully set API key "${apiKeyName}" for ${selectedActivity}`);
       // Reset form
       setApiKeyValue("");
+      
+      // Update API key statuses
+      updateApiKeyStatuses();
     } else {
       addLog(`Failed to set API key "${apiKeyName}" for ${selectedActivity}`);
     }
@@ -157,59 +176,115 @@ const TestAI = () => {
                     Configure API Keys
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
                     <DialogTitle>Configure API Keys</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="activity">Select Activity</Label>
-                      <select
-                        id="activity"
-                        className="w-full p-2 border rounded-md"
-                        value={selectedActivity || ""}
-                        onChange={(e) => setSelectedActivity(e.target.value)}
-                      >
-                        <option value="">-- Select Activity --</option>
-                        {activities.filter(a => a.requiredApiKeys && a.requiredApiKeys.length > 0).map((activity, i) => (
-                          <option key={i} value={activity.name}>
-                            {activity.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {selectedActivity && (
-                      <>
-                        <div className="space-y-2">
-                          <Label htmlFor="apiKeyName">API Key Name</Label>
-                          <Input
-                            id="apiKeyName"
-                            value={apiKeyName}
-                            onChange={(e) => setApiKeyName(e.target.value)}
-                            placeholder="e.g., trendsapi"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="apiKeyValue">API Key Value</Label>
-                          <Input
-                            id="apiKeyValue"
-                            value={apiKeyValue}
-                            onChange={(e) => setApiKeyValue(e.target.value)}
-                            placeholder="Enter API key value"
-                            type="password"
-                          />
-                        </div>
-                        <Button 
-                          onClick={handleSetApiKey}
-                          disabled={!apiKeyName || !apiKeyValue}
-                          className="w-full"
+                  <Tabs defaultValue="activities">
+                    <TabsList className="grid w-full grid-cols-2 mb-4">
+                      <TabsTrigger value="activities">Activities</TabsTrigger>
+                      <TabsTrigger value="integrations">Integrations</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="activities" className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="activity">Select Activity</Label>
+                        <select
+                          id="activity"
+                          className="w-full p-2 border rounded-md"
+                          value={selectedActivity || ""}
+                          onChange={(e) => setSelectedActivity(e.target.value)}
                         >
-                          Save API Key
-                        </Button>
-                      </>
-                    )}
-                  </div>
+                          <option value="">-- Select Activity --</option>
+                          {activities.filter(a => a.requiredApiKeys && a.requiredApiKeys.length > 0).map((activity, i) => (
+                            <option key={i} value={activity.name}>
+                              {activity.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {selectedActivity && (
+                        <>
+                          <div className="space-y-2">
+                            <Label htmlFor="apiKeyName">API Key Name</Label>
+                            <Input
+                              id="apiKeyName"
+                              value={apiKeyName}
+                              onChange={(e) => setApiKeyName(e.target.value)}
+                              placeholder="e.g., trendsapi"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="apiKeyValue">API Key Value</Label>
+                            <Input
+                              id="apiKeyValue"
+                              value={apiKeyValue}
+                              onChange={(e) => setApiKeyValue(e.target.value)}
+                              placeholder="Enter API key value"
+                              type="password"
+                            />
+                          </div>
+                          <Button 
+                            onClick={handleSetApiKey}
+                            disabled={!apiKeyName || !apiKeyValue}
+                            className="w-full"
+                          >
+                            Save API Key
+                          </Button>
+                        </>
+                      )}
+                    </TabsContent>
+                    
+                    <TabsContent value="integrations" className="space-y-4">
+                      <ScrollArea className="h-[300px] border rounded-md p-4">
+                        {integrations.length > 0 ? (
+                          <ul className="space-y-4">
+                            {integrations.map((integration, i) => (
+                              <li key={i} className="p-3 border rounded-md">
+                                <div className="flex justify-between items-center mb-2">
+                                  <h3 className="font-semibold">{integration.displayName}</h3>
+                                  <span className={`text-sm px-2 py-1 rounded-full ${
+                                    integration.connected ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                                  }`}>
+                                    {integration.connected ? "Connected" : "Not Connected"}
+                                  </span>
+                                </div>
+                                <div className="text-sm text-gray-500 mb-2">
+                                  Authentication methods: {integration.authModes.join(", ")}
+                                </div>
+                                {integration.authModes.includes("API_KEY") && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full mt-2"
+                                    onClick={() => {
+                                      setSelectedActivity(integration.name);
+                                      setApiKeyName("api_key");
+                                    }}
+                                  >
+                                    Configure API Key
+                                  </Button>
+                                )}
+                                {integration.authModes.includes("OAUTH2") && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full mt-2"
+                                    disabled
+                                  >
+                                    Connect via OAuth (Coming Soon)
+                                  </Button>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="text-gray-500 italic">No integrations available</div>
+                        )}
+                      </ScrollArea>
+                    </TabsContent>
+                  </Tabs>
                 </DialogContent>
               </Dialog>
             </div>
@@ -231,6 +306,28 @@ const TestAI = () => {
                 <span className="font-medium">{brainState.lastActivity}</span>
               </div>
             </div>
+            
+            {/* API Key Status Section */}
+            {Object.keys(apiKeyStatuses).length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <h3 className="font-semibold mb-2">API Key Status</h3>
+                <div className="space-y-2">
+                  {Object.entries(apiKeyStatuses).map(([activity, keys]) => (
+                    <div key={activity} className="text-sm">
+                      <span className="font-medium">{activity}:</span>
+                      <ul className="ml-2">
+                        {Object.entries(keys).map(([key, exists]) => (
+                          <li key={key} className="flex items-center">
+                            <span className={`w-2 h-2 rounded-full mr-2 ${exists ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                            {key} {exists ? '✓' : '✗'}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </Card>
         </div>
 

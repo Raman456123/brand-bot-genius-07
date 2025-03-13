@@ -1,10 +1,12 @@
 
-import { Activity, ActivityResult, ApiKeyManager } from "./types";
+import { Activity, ActivityResult, ApiKeyManager, Integration } from "./types";
 
 /**
- * Simple API key manager that uses localStorage
+ * Enhanced API key manager that uses localStorage with persistence
  */
 class LocalStorageApiKeyManager implements ApiKeyManager {
+  private requiredKeys: Record<string, string[]> = {};
+  
   private getKeyId(activityName: string, keyName: string): string {
     return `ai_influencer_${activityName.toLowerCase()}_${keyName.toLowerCase()}`;
   }
@@ -23,11 +25,52 @@ class LocalStorageApiKeyManager implements ApiKeyManager {
     try {
       const keyId = this.getKeyId(activityName, keyName);
       localStorage.setItem(keyId, value);
+      
+      // Register this key as required for the activity if not already registered
+      if (!this.requiredKeys[activityName]) {
+        this.requiredKeys[activityName] = [];
+      }
+      
+      if (!this.requiredKeys[activityName].includes(keyName)) {
+        this.requiredKeys[activityName].push(keyName);
+      }
+      
       return true;
     } catch (error) {
       console.error("Error storing API key:", error);
       return false;
     }
+  }
+  
+  /**
+   * Register required keys for an activity
+   */
+  registerRequiredKeys(activityName: string, keys: string[]): void {
+    this.requiredKeys[activityName] = [...keys];
+  }
+  
+  /**
+   * Get all registered required API keys
+   */
+  listRequiredApiKeys(): Record<string, string[]> {
+    return { ...this.requiredKeys };
+  }
+  
+  /**
+   * Get the status (exists/doesn't exist) for all registered API keys
+   */
+  async getAllApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>> {
+    const statuses: Record<string, Record<string, boolean>> = {};
+    
+    for (const [activity, keys] of Object.entries(this.requiredKeys)) {
+      statuses[activity] = {};
+      
+      for (const key of keys) {
+        statuses[activity][key] = await this.checkApiKeyExists(activity, key);
+      }
+    }
+    
+    return statuses;
   }
 }
 
@@ -48,10 +91,51 @@ export class AIInfluencerBrain {
     }
   };
   private apiKeyManager: ApiKeyManager;
+  private integrations: Integration[] = [];
 
   constructor(customApiKeyManager?: ApiKeyManager) {
     // Initialize the brain
     this.apiKeyManager = customApiKeyManager || new LocalStorageApiKeyManager();
+    this.initializeIntegrations();
+  }
+
+  /**
+   * Initialize available integrations (mock implementation)
+   */
+  private initializeIntegrations(): void {
+    // In a real implementation, this would load integrations from an API
+    // For now, we'll add a few mock integrations
+    this.integrations = [
+      {
+        name: "TWITTER",
+        displayName: "Twitter",
+        connected: false,
+        authModes: ["OAUTH2"],
+      },
+      {
+        name: "TRENDSAPI",
+        displayName: "Trends API",
+        connected: false,
+        authModes: ["API_KEY"],
+        apiKeyDetails: {
+          fields: [
+            {
+              name: "api_key",
+              displayName: "API Key",
+              description: "Your Trends API key",
+              required: true
+            }
+          ]
+        }
+      }
+    ];
+  }
+
+  /**
+   * Get available integrations
+   */
+  getAvailableIntegrations(): Integration[] {
+    return this.integrations;
   }
 
   /**
@@ -133,8 +217,48 @@ export class AIInfluencerBrain {
             timestamp: new Date().toISOString()
           };
         }
+      },
+      {
+        name: "SocialMediaPost",
+        energyCost: 0.3,
+        cooldown: 7200, // 2 hours in seconds
+        requiredSkills: ["communication", "creativity"],
+        requiredApiKeys: ["twitter"],
+        execute: async (): Promise<ActivityResult> => {
+          // Check if we have the required API key
+          const hasApiKey = await this.apiKeyManager.checkApiKeyExists("SocialMediaPost", "twitter");
+          if (!hasApiKey) {
+            return {
+              success: false,
+              data: null,
+              error: "Missing required API key: twitter",
+              metadata: {},
+              timestamp: new Date().toISOString()
+            };
+          }
+          
+          return {
+            success: true,
+            data: "Posted a new update to Twitter",
+            error: null,
+            metadata: {},
+            timestamp: new Date().toISOString()
+          };
+        }
       }
     ];
+    
+    // Register all required API keys with the manager
+    if (this.apiKeyManager instanceof LocalStorageApiKeyManager) {
+      for (const activity of this.activities) {
+        if (activity.requiredApiKeys && activity.requiredApiKeys.length > 0) {
+          (this.apiKeyManager as LocalStorageApiKeyManager).registerRequiredKeys(
+            activity.name, 
+            activity.requiredApiKeys
+          );
+        }
+      }
+    }
   }
 
   /**
@@ -181,6 +305,13 @@ export class AIInfluencerBrain {
   }
 
   /**
+   * Get API key statuses for all activities
+   */
+  async getApiKeyStatuses(): Promise<Record<string, Record<string, boolean>>> {
+    return await this.apiKeyManager.getAllApiKeyStatuses();
+  }
+
+  /**
    * Select the next activity based on current state and constraints
    */
   async selectNextActivity(): Promise<Activity | null> {
@@ -216,7 +347,7 @@ export class AIInfluencerBrain {
       // Different activities might align better with different personality traits
       if (activity.name === "CreateContent") {
         weight *= (1 + this.state.personality.creativity * 0.5);
-      } else if (activity.name === "EngageWithFollowers") {
+      } else if (activity.name === "EngageWithFollowers" || activity.name === "SocialMediaPost") {
         weight *= (1 + this.state.personality.friendliness * 0.5);
       } else if (activity.name === "AnalyzeTrends") {
         weight *= (1 + this.state.personality.curiosity * 0.5);

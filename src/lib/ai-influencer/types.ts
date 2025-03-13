@@ -7,7 +7,7 @@ export interface Activity {
   energyCost: number;
   cooldown: number; // in seconds
   requiredSkills: string[];
-  requiredApiKeys?: string[]; // New field for required API keys
+  requiredApiKeys?: string[]; // API keys needed for this activity
   execute: () => Promise<ActivityResult>;
 }
 
@@ -42,4 +42,24 @@ export interface ApiKeyManager {
   checkApiKeyExists: (activityName: string, keyName: string) => Promise<boolean>;
   getApiKey: (activityName: string, keyName: string) => Promise<string | null>;
   setApiKey: (activityName: string, keyName: string, value: string) => Promise<boolean>;
+  listRequiredApiKeys: () => Record<string, string[]>;
+  getAllApiKeyStatuses: () => Promise<Record<string, Record<string, boolean>>>;
+}
+
+/**
+ * Integration - represents an external service integration
+ */
+export interface Integration {
+  name: string;
+  displayName: string;
+  connected: boolean;
+  authModes: string[];
+  apiKeyDetails?: {
+    fields: {
+      name: string;
+      displayName: string;
+      description: string;
+      required: boolean;
+    }[];
+  };
 }
