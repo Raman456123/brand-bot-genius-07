@@ -1,6 +1,7 @@
 import { Activity, ActivityResult, AIState } from "./types";
 import { AIInfluencerBrain } from "./brain";
 import { MemoryManager } from "./memory";
+import { AIBrainInterface } from './brain-interface';
 
 /**
  * Main controller for the AI Influencer - manages the lifecycle and execution flow

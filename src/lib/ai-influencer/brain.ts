@@ -1,4 +1,3 @@
-
 import { Activity, ActivityResult, ApiKeyManager, Integration, AIState, SkillsConfig } from "./types";
 import { ChatActivity } from "./activities/ChatActivity";
 import { ImageGenerationActivity } from "./activities/ImageGenerationActivity";
@@ -16,6 +15,7 @@ import { PostTweetActivity } from "./activities/PostTweetActivity";
 import { PostRecentMemoriesTweetActivity } from "./activities/PostRecentMemoriesTweetActivity";
 import { SuggestNewActivitiesActivity } from "./activities/SuggestNewActivitiesActivity";
 import { TestActivity } from "./activities/TestActivity";
+import { AIBrainInterface } from './brain-interface';
 
 /**
  * In-memory API key manager for the AI influencer
@@ -50,7 +50,7 @@ class EnhancedApiKeyManager implements ApiKeyManager {
 /**
  * Brain for the AI influencer that manages state, activities, and decision making
  */
-export class AIInfluencerBrain {
+export class AIInfluencerBrain implements AIBrainInterface {
   private activities: Activity[] = [];
   private availableActivities: Activity[] = [];
   private apiKeyManager: ApiKeyManager;
@@ -550,4 +550,7 @@ export class AIInfluencerBrain {
     
     return result;
   }
-}
+
+  /**
+   * Load AI
+
