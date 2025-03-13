@@ -12,6 +12,7 @@ import { EvaluateActivity } from "./activities/EvaluateActivity";
 import { FetchNewsActivity } from "./activities/FetchNewsActivity";
 import { NapActivity } from "./activities/NapActivity";
 import { PostTweetActivity } from "./activities/PostTweetActivity";
+import { PostRecentMemoriesTweetActivity } from "./activities/PostRecentMemoriesTweetActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -158,6 +159,17 @@ export class AIInfluencerBrain {
       defaultFormat: "png"
     });
     
+    // Register the post recent memories tweet activity
+    const postRecentMemoriesTweetActivity = new PostRecentMemoriesTweetActivity({
+      twitterUsername: "AIInfluencer",
+      numActivitiesToFetch: 10,
+      ignoredActivityTypes: [
+        "post_recent_memories_tweet",
+        "post_tweet_with_image",
+        "write_tweet"
+      ]
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -171,6 +183,7 @@ export class AIInfluencerBrain {
     this.activities.push(fetchNewsActivity);
     this.activities.push(napActivity);
     this.activities.push(postTweetActivity);
+    this.activities.push(postRecentMemoriesTweetActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
@@ -406,3 +419,4 @@ export class AIInfluencerBrain {
     return result;
   }
 }
+

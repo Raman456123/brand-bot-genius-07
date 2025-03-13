@@ -217,3 +217,17 @@ export interface NapOptions {
 export interface NapResult {
   napMinutes: number;
 }
+
+export interface PostRecentMemoriesTweetOptions {
+  numActivitiesToFetch?: number;
+  twitterUsername?: string;
+  ignoredActivityTypes?: string[];
+}
+
+export interface PostRecentMemoriesTweetResult {
+  tweetId: string;
+  content: string;
+  tweetLink: string;
+  recentMemoriesUsed: string[];
+  imageCount: number;
+}
