@@ -63,3 +63,15 @@ export interface Integration {
     }[];
   };
 }
+
+/**
+ * Memory entry for storing activity history
+ */
+export interface MemoryEntry {
+  timestamp: string;
+  activity_type: string; 
+  success: boolean;
+  error: string | null;
+  data: any | null;
+  metadata: Record<string, any>;
+}

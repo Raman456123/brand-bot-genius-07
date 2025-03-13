@@ -1,12 +1,14 @@
 
 import { Activity, ActivityResult, AIState } from "./types";
 import { AIInfluencerBrain } from "./brain";
+import { MemoryManager } from "./memory";
 
 /**
  * Main controller for the AI Influencer - manages the lifecycle and execution flow
  */
 export class AIInfluencerController {
   private brain: AIInfluencerBrain;
+  private memory: MemoryManager;
   private isRunning: boolean = false;
   private runInterval: number | null = null;
   private lastActivityTime: Date | null = null;
@@ -20,10 +22,12 @@ export class AIInfluencerController {
     onActivityCompleted?: (result: ActivityResult, activityName: string) => void;
     onStateChanged?: (state: AIState) => void;
     onLog?: (message: string) => void;
+    onMemoryUpdate?: (memory: any) => void;
   } = {};
 
   constructor(customBrain?: AIInfluencerBrain) {
     this.brain = customBrain || new AIInfluencerBrain();
+    this.memory = new MemoryManager();
     
     // Initialize the brain
     this.brain.loadActivities();
@@ -32,7 +36,7 @@ export class AIInfluencerController {
   /**
    * Add event listeners
    */
-  on(event: 'activitySelected' | 'activityCompleted' | 'stateChanged' | 'log', 
+  on(event: 'activitySelected' | 'activityCompleted' | 'stateChanged' | 'log' | 'memoryUpdate', 
       callback: (...args: any[]) => void) {
     switch (event) {
       case 'activitySelected':
@@ -46,6 +50,9 @@ export class AIInfluencerController {
         break;
       case 'log':
         this.listeners.onLog = callback as (message: string) => void;
+        break;
+      case 'memoryUpdate':
+        this.listeners.onMemoryUpdate = callback as (memory: any) => void;
         break;
     }
   }
@@ -125,12 +132,29 @@ export class AIInfluencerController {
       this.lastActivityTime = new Date();
       const result = await this.brain.executeActivity(activity);
       
-      // Record result
+      // Record result in both controller and memory system
       this.activityHistory.push({
         timestamp: new Date().toISOString(),
         activityName: activity.name,
         result
       });
+      
+      // Store activity result in memory
+      const memoryEntry = {
+        timestamp: new Date().toISOString(),
+        activity_type: activity.name,
+        success: result.success,
+        error: result.error,
+        data: result.data,
+        metadata: result.metadata || {}
+      };
+      
+      this.memory.storeActivityResult(memoryEntry);
+      
+      // Notify about memory updates
+      if (this.listeners.onMemoryUpdate) {
+        this.listeners.onMemoryUpdate(this.memory.getRecentActivities());
+      }
       
       // Log result
       if (result.success) {
@@ -177,12 +201,29 @@ export class AIInfluencerController {
     this.lastActivityTime = new Date();
     const result = await this.brain.executeActivity(activity);
     
-    // Record result
+    // Record result in both controller and memory system
     this.activityHistory.push({
       timestamp: new Date().toISOString(),
       activityName: activity.name,
       result
     });
+    
+    // Store activity result in memory
+    const memoryEntry = {
+      timestamp: new Date().toISOString(),
+      activity_type: activity.name,
+      success: result.success,
+      error: result.error,
+      data: result.data,
+      metadata: result.metadata || {}
+    };
+    
+    this.memory.storeActivityResult(memoryEntry);
+    
+    // Notify about memory updates
+    if (this.listeners.onMemoryUpdate) {
+      this.listeners.onMemoryUpdate(this.memory.getRecentActivities());
+    }
     
     // Notify listeners
     if (this.listeners.onActivityCompleted) {
@@ -202,6 +243,13 @@ export class AIInfluencerController {
    */
   getActivityHistory() {
     return [...this.activityHistory];
+  }
+
+  /**
+   * Get the AI Influencer's memory
+   */
+  getMemory() {
+    return this.memory;
   }
 
   /**
