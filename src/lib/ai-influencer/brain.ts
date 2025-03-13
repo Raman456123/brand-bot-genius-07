@@ -11,6 +11,7 @@ import { DrawActivity } from "./activities/DrawActivity";
 import { EvaluateActivity } from "./activities/EvaluateActivity";
 import { FetchNewsActivity } from "./activities/FetchNewsActivity";
 import { NapActivity } from "./activities/NapActivity";
+import { PostTweetActivity } from "./activities/PostTweetActivity";
 
 /**
  * In-memory API key manager for the AI influencer
@@ -149,6 +150,14 @@ export class AIInfluencerBrain {
       napMinutes: 15
     });
     
+    // Register the post tweet activity
+    const postTweetActivity = new PostTweetActivity({
+      twitterUsername: "AIInfluencer",
+      imageGenerationEnabled: true,
+      defaultSize: "1024x1024",
+      defaultFormat: "png"
+    });
+    
     this.activities.push(chatActivity);
     this.activities.push(imageGenerationActivity);
     this.activities.push(webScrapingActivity);
@@ -161,6 +170,7 @@ export class AIInfluencerBrain {
     this.activities.push(evaluateActivity);
     this.activities.push(fetchNewsActivity);
     this.activities.push(napActivity);
+    this.activities.push(postTweetActivity);
     
     // Example activities (replace with your actual activities)
     this.activities.push({
