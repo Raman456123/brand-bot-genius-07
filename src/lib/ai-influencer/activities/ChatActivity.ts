@@ -156,11 +156,16 @@ export class ChatActivity implements Activity {
     try {
       console.log(`Making API call to OpenAI with model ${modelName || this.modelName}`);
       
+      // Use the OpenAI key provided by the user
+      const openAiKey = apiKey === "DEFAULT_OPENAI_KEY" 
+        ? "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"
+        : apiKey;
+      
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${openAiKey}`
         },
         body: JSON.stringify({
           model: modelName || this.modelName,
